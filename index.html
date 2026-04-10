@@ -37,21 +37,21 @@
 
       <!-- HUD 顶栏 -->
       <div id="hud">
-        <div class="hud-item">
+        <div class="hud-item hud-left">
           <span class="hud-label">分数</span>
           <span id="score" class="hud-value score-text">0</span>
         </div>
 
-        <!-- 全局提示框 -->
-        <div id="feedback-container">
-            <span id="feedback-text" class="feedback-text"></span>
-            <span id="combo-text" class="combo-text hidden"></span>
-        </div>
-
-        <div class="hud-item">
+        <div class="hud-item hud-right">
           <span id="timer" class="hud-value timer-text">60</span>
           <span class="hud-label">秒</span>
         </div>
+      </div>
+
+      <!-- 全局提示框 悬浮在中央偏上 -->
+      <div id="feedback-container">
+        <span id="feedback-text" class="feedback-text"></span>
+        <span id="combo-text" class="combo-text hidden"></span>
       </div>
 
       <!-- 炒菜阶段 UI -->

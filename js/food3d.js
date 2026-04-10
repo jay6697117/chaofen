@@ -2,12 +2,60 @@
 
 import * as THREE from 'three';
 
-// emoji 纹理缓存
+// emoji/image 纹理缓存
 const textureCache = new Map();
 
-function createEmojiTexture(emoji) {
-  if (textureCache.has(emoji)) return textureCache.get(emoji);
+function createFoodTexture(ing) {
+  const cacheKey = ing.id;
+  if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
 
+  // 指定支持真实材质的食材
+  const realisticImages = {
+    'noodles': 'assets/images/food_noodles.png',
+    'beef': 'assets/images/food_beef.png',
+    'onion': 'assets/images/food_onion.png'
+  };
+
+  if (realisticImages[ing.id]) {
+    const texture = new THREE.Texture();
+    const img = new Image();
+    img.src = realisticImages[ing.id];
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // 抠除白色背景 (RGB都大于235就算白色)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 235 && data[i+1] > 235 && data[i+2] > 235) {
+          // 对边缘做一个简单的羽化过度也可以，但这里直接变为透明即可
+          data[i+3] = 0; 
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+      
+      texture.image = canvas;
+      texture.needsUpdate = true;
+    };
+    img.onerror = () => {
+      // 降级使用 emoji
+      createEmojiFallback(ing.emoji, texture);
+    };
+    textureCache.set(cacheKey, texture);
+    return texture;
+  } else {
+    const texture = new THREE.Texture();
+    createEmojiFallback(ing.emoji, texture);
+    textureCache.set(cacheKey, texture);
+    return texture;
+  }
+}
+
+function createEmojiFallback(emoji, texture) {
   const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -17,11 +65,8 @@ function createEmojiTexture(emoji) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(emoji, size / 2, size / 2);
-
-  const texture = new THREE.CanvasTexture(canvas);
+  texture.image = canvas;
   texture.needsUpdate = true;
-  textureCache.set(emoji, texture);
-  return texture;
 }
 
 // 单个食材对象
@@ -61,7 +106,7 @@ export class FoodSystem {
     this.wokDepth = wokDepth;
 
     ingredients.forEach((ing, i) => {
-      const texture = createEmojiTexture(ing.emoji);
+      const texture = createFoodTexture(ing);
       const material = new THREE.SpriteMaterial({
         map: texture,
         transparent: true,

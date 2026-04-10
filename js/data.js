@@ -68,7 +68,7 @@ export const COLORS = {
 
 // 游戏核心常量
 export const GAME = {
-  GAME_DURATION: 60,            // 每局秒数
+  GAME_DURATION: 40,            // 每局秒数
   SEASON_RING_SPEED: 1.2,       // 调料环收缩速度
   SEASON_TARGET_RADIUS: 40,     // 调料目标半径
   SEASON_PERFECT_RANGE: 8,      // 完美判定范围

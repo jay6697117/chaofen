@@ -19,6 +19,12 @@ export class Wok3D {
     this.isTossing = false;    // 是否在颠锅动画中
     this.leverValue = 0;       // 操作杆当前值
 
+    // 锅的物理限制 — 防止颠出屏幕
+    this.maxWokLift = 2.0;     // 锅最大抬起高度（约到屏幕中间）
+    this.maxTossAngle = 0.8;   // 锅最大倾斜角度（约 45°）
+    this.maxAngVel = 8;        // 角速度上限
+    this.maxLiftVel = 7;       // 垂直速度上限
+
     // 锅的基础 Y 位置
     this.baseY = 1.3;
 
@@ -149,10 +155,10 @@ export class Wok3D {
   toss(force) {
     const f = Math.min(1, Math.max(0, force));
     this.isTossing = true;
-    // 给一个向上的角速度冲量
-    this.tossAngVel = f * 6;
-    // 给一个向上的位移速度
-    this.wokLiftVel = f * 5;
+    // 给一个向上的角速度冲量，但限制最大值防止连续点击叠加过高
+    this.tossAngVel = Math.min(this.tossAngVel + f * 6, this.maxAngVel);
+    // 给一个向上的位移速度，同样限制上限
+    this.wokLiftVel = Math.min(this.wokLiftVel + f * 5, this.maxLiftVel);
     return f;
   }
 
@@ -170,6 +176,19 @@ export class Wok3D {
       // 垂直位移 — 重力 + 弹簧
       this.wokLiftVel -= 12 * dt; // 重力
       this.wokLift += this.wokLiftVel * dt;
+
+      // 限制锅的最大抬起高度 — 确保锅始终在屏幕内
+      if (this.wokLift > this.maxWokLift) {
+        this.wokLift = this.maxWokLift;
+        // 碰到天花板后速度反弹衰减，模拟弹性碰撞
+        this.wokLiftVel = -Math.abs(this.wokLiftVel) * 0.3;
+      }
+
+      // 限制锅的最大倾斜角度 — 不让锅翻过头
+      if (Math.abs(this.tossAngle) > this.maxTossAngle) {
+        this.tossAngle = Math.sign(this.tossAngle) * this.maxTossAngle;
+        this.tossAngVel *= -0.3; // 角度碰壁反弹
+      }
 
       // 地面碰撞
       if (this.wokLift < 0) {

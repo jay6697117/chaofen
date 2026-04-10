@@ -23,11 +23,11 @@ export class SceneManager {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x2c1f17); // 提亮背景颜色
 
-    // 摄像机 — 45° 俯视角，锅把朝向玩家
+    // 摄像机 — 俯视角，精确调节看点(lookAt)使锅把刚好在屏幕底部
     const aspect = container.clientWidth / container.clientHeight;
     this.camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 100);
-    this.camera.position.set(0, 8, 8);
-    this.camera.lookAt(0, 0.5, 0);
+    this.camera.position.set(0, 9.5, 9.5);
+    this.camera.lookAt(0, 0.8, -0.5);
 
     // 摄像机震动
     this._shakeIntensity = 0;

@@ -32,6 +32,13 @@ window.addEventListener('DOMContentLoaded', () => {
   let audioEngine = null;
   let gameManager = null;
   
+  // 确保音乐在播放的辅助函数
+  function ensureMusicPlaying() {
+    if (musicPlayer && !musicPlayer.isPlaying) {
+      musicPlayer.play();
+    }
+  }
+
   function initGame() {
     if (!audioEngine) {
       try {
@@ -46,6 +53,9 @@ window.addEventListener('DOMContentLoaded', () => {
       gameManager = new GameManager(audioEngine);
     }
     
+    // 点击开始炒粉时，确保音乐在播放
+    ensureMusicPlaying();
+    
     gameManager.startGame();
   }
 
@@ -55,6 +65,8 @@ window.addEventListener('DOMContentLoaded', () => {
   // 玩法说明 Modal
   howToPlayBtn.addEventListener('click', () => {
     howToModal.classList.remove('hidden');
+    // 点击玩法说明时，确保音乐在播放
+    ensureMusicPlaying();
   });
   
   closeHowToBtn.addEventListener('click', () => {
@@ -79,7 +91,7 @@ window.addEventListener('DOMContentLoaded', () => {
   resizeCanvas();
 
   // 初始化音乐播放器组件
-  new MusicPlayer();
+  const musicPlayer = new MusicPlayer();
 
   // 添加全局阻止默认拖拽、双击缩放 (移动端友好)
   document.addEventListener('touchmove', function (event) {

@@ -108,7 +108,7 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 16px 24px;
+  padding: 15px 20px;
   background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);
   z-index: 10;
   pointer-events: none;
@@ -130,7 +130,7 @@ html, body {
 .hud-value {
   font-family: var(--font-en);
   font-weight: 900;
-  font-size: 40px;
+  font-size: 28px;
   color: #fff;
   text-shadow: 0 4px 15px rgba(0,0,0,0.8);
 }
@@ -149,10 +149,15 @@ html, body {
 
 /* --- 提示与连击 --- */
 #feedback-container {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 10px;
+  z-index: 20;
+  pointer-events: none;
 }
 
 .feedback-text {
@@ -189,25 +194,34 @@ html, body {
 /* ---- 订单卡片 ---- */
 #order-info {
   position: absolute;
-  top: 80px;
-  left: 20px;
-  padding: 10px 14px;
+  top: 15px; /* 放在顶部中间 */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
   z-index: 10;
-  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(30,15,5,0.75), rgba(10,5,0,0.6));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.6);
   pointer-events: none;
 }
 
 .order-header {
   font-weight: 700;
-  font-size: 16px;
-  margin-bottom: 6px;
+  font-size: 14px;
+  margin-bottom: 4px;
 }
 
 .order-ingredients-list {
   display: flex;
   gap: 4px;
-  font-size: 20px;
-  margin-bottom: 10px;
+  font-size: 16px;
+  margin-bottom: 6px;
 }
 
 .ingredient-icon {
@@ -215,10 +229,10 @@ html, body {
 }
 
 .progress-bar {
-  width: 100%;
-  height: 18px;
+  width: 130px;
+  height: 14px;
   background: rgba(0, 0, 0, 0.4);
-  border-radius: 9px;
+  border-radius: 7px;
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -251,10 +265,10 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   color: #fff;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   text-shadow: 
     -1px -1px 0 #000,  
      1px -1px 0 #000,
