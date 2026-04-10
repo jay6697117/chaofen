@@ -1,86 +1,253 @@
-// 炒粉大师 — 3D 食材系统
+// 炒粉大师 — 3D 食材系统（真实食材版）
 
 import * as THREE from 'three';
 
-// emoji/image 纹理缓存
+// 纹理缓存
 const textureCache = new Map();
 
-function createFoodTexture(ing) {
-  const cacheKey = ing.id;
-  if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
+// 所有食材的真实图片映射
+const FOOD_IMAGES = {
+  'noodles': 'assets/images/food_noodles.png',
+  'beef': 'assets/images/food_beef.png',
+  'egg': 'assets/images/food_egg.png',
+  'onion': 'assets/images/food_onion.png',
+  'chili': 'assets/images/food_chili.png',
+  'shrimp': 'assets/images/food_shrimp.png',
+  'vegetable': 'assets/images/food_vegetable.png',
+  'mushroom': 'assets/images/food_mushroom.png',
+};
 
-  // 指定支持真实材质的食材
-  const realisticImages = {
-    'noodles': 'assets/images/food_noodles.png',
-    'beef': 'assets/images/food_beef.png',
-    'onion': 'assets/images/food_onion.png'
-  };
+// 每种食材在锅中的份数 — 要足够多才像真正在炒菜
+const FOOD_COUNTS = {
+  'noodles': 12,   // 河粉是主食，要最多
+  'beef': 8,
+  'egg': 7,
+  'onion': 7,
+  'chili': 7,
+  'shrimp': 7,
+  'vegetable': 8,
+  'mushroom': 7,
+};
 
-  if (realisticImages[ing.id]) {
-    const texture = new THREE.Texture();
-    const img = new Image();
-    img.src = realisticImages[ing.id];
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      
-      // 抠除白色背景 (RGB都大于235就算白色)
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
+// 每种食材的 Sprite 大小范围 [最小, 最大] — 加大尺寸铺满锅面
+const FOOD_SCALES = {
+  'noodles': [0.7, 0.95],
+  'beef': [0.5, 0.7],
+  'egg': [0.5, 0.7],
+  'onion': [0.45, 0.65],
+  'chili': [0.45, 0.6],
+  'shrimp': [0.5, 0.68],
+  'vegetable': [0.55, 0.75],
+  'mushroom': [0.45, 0.65],
+};
+
+/**
+ * 加载食材纹理 — 去除棋盘格/白色背景
+ * 图片实际是 JPEG（无透明通道），需要手动抠背景
+ * 棋盘格特征：灰白交替 (约 #CCCCCC 和 #FFFFFF)
+ */
+function loadFoodTexture(ingId) {
+  if (textureCache.has(ingId)) return textureCache.get(ingId);
+
+  const imgPath = FOOD_IMAGES[ingId];
+  if (!imgPath) return null;
+
+  const texture = new THREE.Texture();
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const img = new Image();
+  img.src = imgPath;
+  img.onload = () => {
+    const size = 512; // 统一尺寸提升性能
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // 居中绘制
+    const scale = size / Math.max(img.width, img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
+
+    const imageData = ctx.getImageData(0, 0, size, size);
+    const data = imageData.data;
+
+    // 检测角落是否已透明（图片自带 Alpha）
+    let transparentCornerCount = 0;
+    const testCorners = [[0,0],[size-1,0],[0,size-1],[size-1,size-1]];
+    for (const [cx, cy] of testCorners) {
+      if (data[((cy * size + cx) * 4) + 3] < 128) transparentCornerCount++;
+    }
+
+    if (transparentCornerCount >= 3) {
+      // 图片自带透明通道，仅清理 canvas 空白区
       for (let i = 0; i < data.length; i += 4) {
-        if (data[i] > 235 && data[i+1] > 235 && data[i+2] > 235) {
-          // 对边缘做一个简单的羽化过度也可以，但这里直接变为透明即可
-          data[i+3] = 0; 
+        if (data[i] === 0 && data[i+1] === 0 && data[i+2] === 0 && data[i+3] === 0) {
+          data[i+3] = 0;
         }
       }
-      ctx.putImageData(imageData, 0, 0);
-      
-      texture.image = canvas;
-      texture.needsUpdate = true;
-    };
-    img.onerror = () => {
-      // 降级使用 emoji
-      createEmojiFallback(ing.emoji, texture);
-    };
-    textureCache.set(cacheKey, texture);
-    return texture;
-  } else {
-    const texture = new THREE.Texture();
-    createEmojiFallback(ing.emoji, texture);
-    textureCache.set(cacheKey, texture);
-    return texture;
-  }
+    } else {
+      // 使用 Flood Fill 从角落扩展来检测背景区域
+      const bgMask = new Uint8Array(size * size); // 0=未知, 1=背景, 2=食材
+
+      // 判断一个像素是否"像背景"（纯灰/白 或 纯黑）
+      const isBgColor = (idx) => {
+        const r = data[idx], g = data[idx+1], b = data[idx+2];
+        // 纯黑（canvas 未绘制区域）
+        if (r === 0 && g === 0 && b === 0) return true;
+        // 纯灰/白（棋盘格特征：RGB 差值很小，且整体高亮度）
+        const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
+        const brightness = (r + g + b) / 3;
+        return maxDiff <= 5 && brightness > 185;
+      };
+
+      // 判断两个像素颜色是否足够相近（用于 flood fill 扩展）
+      const colorClose = (idx1, idx2) => {
+        const dr = Math.abs(data[idx1] - data[idx2]);
+        const dg = Math.abs(data[idx1+1] - data[idx2+1]);
+        const db = Math.abs(data[idx1+2] - data[idx2+2]);
+        return dr < 30 && dg < 30 && db < 30;
+      };
+
+      // BFS Flood Fill 从角落开始
+      const queue = [];
+      const seedPoints = [
+        [0, 0], [size-1, 0], [0, size-1], [size-1, size-1],
+        [1, 0], [0, 1], [size-2, 0], [size-1, 1],
+        [0, size-2], [1, size-1], [size-2, size-1], [size-1, size-2],
+      ];
+
+      for (const [sx, sy] of seedPoints) {
+        const si = sy * size + sx;
+        const sIdx = si * 4;
+        if (bgMask[si] === 0 && isBgColor(sIdx)) {
+          bgMask[si] = 1;
+          queue.push(si);
+        }
+      }
+
+      // BFS 扩展
+      const dirs = [-1, 1, -size, size];
+      while (queue.length > 0) {
+        const ci = queue.shift();
+        const cIdx = ci * 4;
+        const cx = ci % size;
+
+        for (const d of dirs) {
+          const ni = ci + d;
+          if (ni < 0 || ni >= size * size) continue;
+          // 防止水平越界
+          const nx = ni % size;
+          if (Math.abs(d) === 1 && Math.abs(nx - cx) !== 1) continue;
+          if (bgMask[ni] !== 0) continue;
+
+          const nIdx = ni * 4;
+          if (isBgColor(nIdx) && colorClose(cIdx, nIdx)) {
+            bgMask[ni] = 1;
+            queue.push(ni);
+          }
+        }
+      }
+
+      // 应用背景 mask
+      for (let i = 0; i < size * size; i++) {
+        const idx = i * 4;
+        if (bgMask[i] === 1) {
+          data[idx + 3] = 0; // 背景 — 完全透明
+        } else if (data[idx] === 0 && data[idx+1] === 0 && data[idx+2] === 0) {
+          data[idx + 3] = 0; // canvas 未绘制区域
+        }
+      }
+
+      // 边缘羽化：背景和食材交界处渐变
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const i = y * size + x;
+          if (bgMask[i] === 1) continue; // 已是背景
+          const idx = i * 4;
+          if (data[idx + 3] === 0) continue; // 已是透明
+
+          // 检查 3 像素内是否有背景
+          let minDist = 4;
+          for (let dy = -3; dy <= 3 && minDist > 1; dy++) {
+            for (let dx = -3; dx <= 3 && minDist > 1; dx++) {
+              const nx = x + dx, ny = y + dy;
+              if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
+              if (bgMask[ny * size + nx] === 1) {
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < minDist) minDist = dist;
+              }
+            }
+          }
+          if (minDist <= 3) {
+            data[idx + 3] = Math.floor(data[idx + 3] * (minDist / 3));
+          }
+        }
+      }
+    }
+
+    // 做一次边缘羽化，让食材边缘更自然
+    edgeFeather(data, size, size, 2);
+
+    ctx.putImageData(imageData, 0, 0);
+    texture.image = canvas;
+    texture.needsUpdate = true;
+  };
+
+  textureCache.set(ingId, texture);
+  return texture;
 }
 
-function createEmojiFallback(emoji, texture) {
-  const size = 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  ctx.font = `${size * 0.72}px serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(emoji, size / 2, size / 2);
-  texture.image = canvas;
-  texture.needsUpdate = true;
+/**
+ * 边缘羽化 — 让透明区域与食材的交界更平滑
+ */
+function edgeFeather(data, w, h, radius) {
+  // 简单的从透明边缘向内渐变
+  const alpha = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    alpha[i] = data[i * 4 + 3];
+  }
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      if (alpha[idx] === 0) continue; // 已经透明的跳过
+
+      // 检查周围是否有透明像素
+      let minDist = radius + 1;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          if (alpha[ny * w + nx] === 0) {
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < minDist) minDist = dist;
+          }
+        }
+      }
+
+      // 如果靠近透明边缘，做渐变
+      if (minDist <= radius) {
+        const factor = minDist / radius;
+        data[idx * 4 + 3] = Math.floor(data[idx * 4 + 3] * factor);
+      }
+    }
+  }
 }
 
 // 单个食材对象
 class FoodItem {
-  constructor(ingredient, sprite) {
+  constructor(ingredient, sprite, scaleVal) {
     this.ingredient = ingredient;
     this.sprite = sprite;
 
-    // 物理状态（世界坐标）
+    // 物理状态
     this.vx = 0;
     this.vy = 0;
     this.vz = 0;
 
-    // 锅内的基准位置（极坐标偏移）
+    // 锅内的基准位置
     this.baseAngle = 0;
     this.baseR = 0;
 
@@ -88,8 +255,11 @@ class FoodItem {
     this.settled = true;
     this.flipped = false;
 
-    // 旋转
+    // 旋转速度
     this.rotSpeed = 0;
+
+    // 基准大小
+    this.baseScale = scaleVal;
   }
 }
 
@@ -99,27 +269,57 @@ export class FoodSystem {
     this.foods = [];
   }
 
-  // 加载一组食材到锅中
+  /**
+   * 加载食材到锅中 — 每种多份，铺满锅面
+   */
   load(ingredients, wokCenter, wokRadius, wokDepth) {
     this.clear();
     this.wokRadius = wokRadius;
     this.wokDepth = wokDepth;
 
-    ingredients.forEach((ing, i) => {
-      const texture = createFoodTexture(ing);
+    // 收集所有需要生成的食材碎片
+    const allPieces = [];
+    ingredients.forEach((ing) => {
+      const count = FOOD_COUNTS[ing.id] || 3;
+      const scaleRange = FOOD_SCALES[ing.id] || [0.35, 0.5];
+      for (let j = 0; j < count; j++) {
+        allPieces.push({
+          ingredient: ing,
+          scale: scaleRange[0] + Math.random() * (scaleRange[1] - scaleRange[0]),
+        });
+      }
+    });
+
+    // 打散顺序让不同食材交错
+    for (let i = allPieces.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allPieces[i], allPieces[j]] = [allPieces[j], allPieces[i]];
+    }
+
+    const totalPieces = allPieces.length;
+
+    allPieces.forEach((piece, i) => {
+      const texture = loadFoodTexture(piece.ingredient.id);
       const material = new THREE.SpriteMaterial({
         map: texture,
         transparent: true,
+        alphaTest: 0.05,
         depthWrite: false,
       });
       const sprite = new THREE.Sprite(material);
-      sprite.scale.set(0.9, 0.9, 0.9); // 放大食材
+      const s = piece.scale;
+      sprite.scale.set(s, s, s);
 
-      // 在锅内分散排列
-      const angle = (i / ingredients.length) * Math.PI * 2 + Math.random() * 0.5;
-      const r = 0.4 + Math.random() * 0.4;
+      // 随机初始旋转角度
+      sprite.material.rotation = Math.random() * Math.PI * 2;
 
-      const food = new FoodItem(ing, sprite);
+      // 向日葵螺旋分布 — 均匀铺满锅面
+      const goldenAngle = 2.399963;
+      const angle = i * goldenAngle + Math.random() * 0.3;
+      const maxR = wokRadius * 0.85;
+      const r = Math.sqrt((i + 0.5) / totalPieces) * maxR;
+
+      const food = new FoodItem(piece.ingredient, sprite, s);
       food.baseAngle = angle;
       food.baseR = r;
 
@@ -128,7 +328,7 @@ export class FoodSystem {
       const surfaceY = -wokDepth * (1 - t * t);
       sprite.position.set(
         wokCenter.x + Math.cos(angle) * r,
-        wokCenter.y + surfaceY + 0.45, // 稍微抬高防止穿模
+        wokCenter.y + surfaceY + 0.42,
         wokCenter.z + Math.sin(angle) * r
       );
 
@@ -137,13 +337,13 @@ export class FoodSystem {
     });
   }
 
-  // 颠锅！给所有食材施加力
+  // 颠锅！
   toss(force, wokCenter) {
     for (const food of this.foods) {
-      // 优化：微调颠勺力度，让菜飞得稍微高一点，但依然保持在真实视野和屏幕内
-      food.vy = force * 8 + Math.random() * 2 + 1; // 适当增加向上加速度
+      const fRand = 0.6 + Math.random() * 0.8;
+      food.vy = force * 8 * fRand + Math.random() * 2 + 1;
       food.vx = (Math.random() - 0.5) * force * 2;
-      food.vz = (Math.random() - 0.5) * force * 1.2 - force * 0.8; // 略向前抛
+      food.vz = (Math.random() - 0.5) * force * 1.2 - force * 0.8;
       food.isFlying = true;
       food.settled = false;
       food.flipped = false;
@@ -157,41 +357,35 @@ export class FoodSystem {
       const sp = food.sprite;
 
       if (food.isFlying) {
-        // 重力
         food.vy -= 18 * dt;
-
-        // 空气阻力
         food.vx *= 0.995;
         food.vz *= 0.995;
 
-        // 更新位置
         sp.position.x += food.vx * dt;
         sp.position.y += food.vy * dt;
         sp.position.z += food.vz * dt;
 
-        // 旋转（Sprite 的 material.rotation）
         sp.material.rotation += food.rotSpeed * dt;
 
-        // 飞行中发光放大
-        sp.scale.set(1.0, 1.0, 1.0);
+        const flyS = food.baseScale * 1.08;
+        sp.scale.set(flyS, flyS, flyS);
 
-        // 翻转标记（飞到最高点）
         if (!food.flipped && food.vy < 0) {
           food.flipped = true;
         }
 
-        // 碰撞检测 — 锅面
+        // 碰撞检测
         const dx = sp.position.x - wokCenter.x;
         const dz = sp.position.z - wokCenter.z;
         const r = Math.sqrt(dx * dx + dz * dz);
 
         if (r < this.wokRadius * 0.95) {
           const t = r / this.wokRadius;
-          const surfaceY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.4; // 调整接触面高度
+          const surfaceY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.4;
 
           if (sp.position.y <= surfaceY) {
             sp.position.y = surfaceY;
-            food.vy = Math.abs(food.vy) * 0.2; // 弹跳
+            food.vy = Math.abs(food.vy) * 0.2;
             food.vx *= 0.6;
             food.vz *= 0.6;
             food.rotSpeed *= 0.5;
@@ -206,44 +400,42 @@ export class FoodSystem {
             }
           }
         } else {
-          // 超出锅边 — 用力拉回（不让食材飞出锅外）
           const pullAngle = Math.atan2(dz, dx);
           food.vx -= Math.cos(pullAngle) * 8 * dt;
           food.vz -= Math.sin(pullAngle) * 8 * dt;
         }
 
-        // 落地保护 — 不让食材穿过台面
         if (sp.position.y < -0.2) {
           sp.position.y = wokCenter.y - this.wokDepth + 0.3;
           food.vy = 2;
         }
       } else if (food.settled) {
-        // 已稳定 — 柔和跟随锅的位置
-        const wobble = Math.sin(Date.now() * 0.002 + food.baseAngle * 3) * 0.03;
+        const wobble = Math.sin(Date.now() * 0.002 + food.baseAngle * 3) * 0.025;
+        const sizzle = Math.sin(Date.now() * 0.012 + food.baseAngle * 7) * 0.006;
         const angle = food.baseAngle + wobble;
         const r = food.baseR;
 
         const targetX = wokCenter.x + Math.cos(angle) * r;
         const targetZ = wokCenter.z + Math.sin(angle) * r;
         const t = r / this.wokRadius;
-        const targetY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.4;
+        const targetY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.42 + sizzle;
 
         sp.position.x += (targetX - sp.position.x) * 0.12;
         sp.position.y += (targetY - sp.position.y) * 0.12;
         sp.position.z += (targetZ - sp.position.z) * 0.12;
 
-        // 恢复正常大小
-        sp.scale.lerp(new THREE.Vector3(0.9, 0.9, 0.9), 0.1);
+        const s = food.baseScale;
+        sp.scale.x += (s - sp.scale.x) * 0.1;
+        sp.scale.y += (s - sp.scale.y) * 0.1;
+        sp.scale.z += (s - sp.scale.z) * 0.1;
       }
     }
   }
 
-  // 检查是否有食材还在飞行中
   hasFlying() {
     return this.foods.some((f) => f.isFlying);
   }
 
-  // 清空食材
   clear() {
     for (const food of this.foods) {
       this.scene.remove(food.sprite);
