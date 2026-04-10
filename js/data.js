@@ -61,31 +61,16 @@ export const ORDERS = [
   },
 ];
 
-// 颜色方案
+// 颜色方案（用于 UI）
 export const COLORS = {
-  fire: ['#FF4500', '#FF6600', '#FF8C00', '#FFA500', '#FFD700', '#FFEC8B'],
-  oil: ['#FFD700', '#FFA500', '#FF8C00', '#FFE4B5'],
-  steam: [
-    'rgba(255, 255, 255, 0.5)',
-    'rgba(240, 240, 240, 0.3)',
-    'rgba(220, 220, 220, 0.2)',
-  ],
-  spark: ['#FFFFFF', '#FFD700', '#FFA500', '#FF6347'],
   celebration: ['#FF6B35', '#FFD700', '#FF4500', '#32CD32', '#4169E1', '#FF69B4'],
 };
 
-// 游戏常量
+// 游戏核心常量
 export const GAME = {
-  WIDTH: 480,
-  HEIGHT: 720,
-  WOK_X: 240,
-  WOK_Y: 370,
-  WOK_RX: 140,
-  WOK_RY: 85,
-  BOWL_DEPTH: 50,
-  GAME_DURATION: 60,
-  SEASON_RING_SPEED: 1.2,
-  SEASON_TARGET_RADIUS: 40,
-  SEASON_PERFECT_RANGE: 8,
-  SEASON_GOOD_RANGE: 20,
+  GAME_DURATION: 60,            // 每局秒数
+  SEASON_RING_SPEED: 1.2,       // 调料环收缩速度
+  SEASON_TARGET_RADIUS: 40,     // 调料目标半径
+  SEASON_PERFECT_RANGE: 8,      // 完美判定范围
+  SEASON_GOOD_RANGE: 20,        // 良好判定范围
 };

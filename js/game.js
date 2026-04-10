@@ -1,842 +1,458 @@
-// 炒粉大师 — 核心游戏逻辑（颠锅版）
+// 炒粉大师 — 核心游戏逻辑与状态机重写
 
-import { ParticleSystem } from './particles.js';
-import { AudioManager } from './audio.js';
-import { INGREDIENTS, ORDERS, GAME } from './data.js';
+import { INGREDIENTS, ORDERS, GAME, COLORS } from './data.js';
+import { SceneManager } from './scene.js';
+import { Wok3D } from './wok.js';
+import { FoodSystem } from './food3d.js';
+import { FireSystem } from './fire3d.js';
+import { LeverControl } from './lever.js';
 
-// 游戏状态
-const STATE = { MENU: 0, COOK: 1, SERVE: 2, RESULT: 3 };
+// 游戏状态枚举
+const GameState = {
+  INIT: 0,
+  IDLE: 1,
+  COOKING: 2,
+  SEASONING: 3,
+  FINISH_DISH: 4,
+  GAME_OVER: 5
+};
 
-// 锅中食材物理对象
-class FoodItem {
-  constructor(ingredient, x, y) {
-    this.ingredient = ingredient;
-    this.x = x;
-    this.y = y;
-    this.vx = 0;
-    this.vy = 0;
-    this.size = 30;
-    this.rotation = Math.random() * Math.PI * 2;
-    this.rotVel = 0;
-    this.isFlying = false;
-    this.flipped = false;
-    this.settled = true;
-    this.baseX = x; // 锅内基准位置偏移
-  }
+export class GameManager {
+  constructor(audio) {
+    this.audio = audio;
+    
+    // UI 元素引用
+    this.ui = {
+      score: document.getElementById('score'),
+      timer: document.getElementById('timer'),
+      cookingUI: document.getElementById('cooking-ui'),
+      orderInfo: document.getElementById('order-info'),
+      orderName: document.getElementById('order-name'),
+      orderIngredients: document.getElementById('order-ingredients'),
+      stirProgress: document.getElementById('stir-progress'),
+      progressBar: document.querySelector('.progress-bar-fill'),
+      seasoningUI: document.getElementById('seasoning-ui'),
+      seasoningCanvas: document.getElementById('seasoning-canvas'),
+      seasoningBtn: document.getElementById('seasoning-btn'),
+      seasoningHint: document.getElementById('seasoning-hint'),
+      feedbackText: document.getElementById('feedback-text'),
+      comboText: document.getElementById('combo-text'),
+      menuScreen: document.getElementById('menu-screen'),
+      resultScreen: document.getElementById('result-screen'),
+      finalScore: document.getElementById('final-score'),
+      dishesServed: document.getElementById('dishes-served'),
+      maxCombo: document.getElementById('max-combo'),
+      dishModal: document.getElementById('dish-modal'),
+      dishImg: document.getElementById('dish-img'),
+      dishName: document.getElementById('dish-name'),
+      dishStars: document.getElementById('dish-stars')
+    };
+    
+    // 调料小游戏 Canvas
+    this.seasonCtx = this.ui.seasoningCanvas ? this.ui.seasoningCanvas.getContext('2d') : null;
+    
+    // 初始化 3D 渲染组件
+    const container = document.getElementById('game-container');
+    this.scene = new SceneManager(container);
+    this.wok = new Wok3D(this.scene.scene);
+    this.foodSystem = new FoodSystem(this.scene.scene);
+    this.fireSystem = new FireSystem(this.scene.scene);
+    this.fireSystem.setBasePosition(this.wok.getWorldCenter());
 
-  update(wokX, wokY, wokRX) {
-    // 重力
-    this.vy += 0.4;
-
-    // 应用速度
-    this.x += this.vx;
-    this.y += this.vy;
-
-    // 碗底碰撞（锅的弧形底部）
-    const relX = this.x - wokX;
-    const normalizedX = relX / (wokRX * 0.7);
-    const bowlFloor = wokY + 8 + normalizedX * normalizedX * 35;
-
-    if (this.y > bowlFloor) {
-      this.y = bowlFloor;
-      this.vy = -Math.abs(this.vy) * 0.25;
-      this.vx *= 0.8;
-      if (Math.abs(this.vy) < 1) {
-        this.vy = 0;
-        this.settled = true;
-        this.isFlying = false;
+    // 初始化操作杆
+    this.lever = new LeverControl(document.body);
+    
+    // 同步操作杆与物理锅
+    this.lever.onChange((val) => {
+      this.wok.setLeverValue(val);
+      this.fireSystem.setIntensity(0.3 + val * 0.7); // 火力随操作杆增大
+      if (this.audio && val > 0.1 && !this.wok.isTossing && this.state === GameState.COOKING) {
+        this.audio.playSizzle(val);
+      } else if (this.audio) {
+        this.audio.stopSizzle();
       }
-    }
-
-    // 横向跟随锅移动（食材在锅里）
-    if (this.settled) {
-      this.x += (wokX + this.baseX - this.x) * 0.15;
-    }
-
-    // 横向边界
-    const maxX = wokRX * 0.65;
-    if (Math.abs(this.x - wokX) > maxX) {
-      this.x = wokX + Math.sign(this.x - wokX) * maxX;
-      this.vx = -this.vx * 0.3;
-    }
-
-    // 阻尼
-    this.vx *= 0.97;
-    this.rotVel *= 0.96;
-    this.rotation += this.rotVel;
-
-    // 飞行状态判定
-    if (this.y < wokY - 20) {
-      this.isFlying = true;
-      this.settled = false;
-    }
-  }
-}
-
-// 分数弹出文字
-class ScorePopup {
-  constructor(text, x, y, color = '#FFD700', fontSize = 24) {
-    this.text = text;
-    this.x = x;
-    this.y = y;
-    this.color = color;
-    this.fontSize = fontSize;
-    this.alpha = 1;
-    this.scale = 0;
-    this.targetScale = 1;
-    this.life = 50;
-    this.vy = -2;
-  }
-
-  update() {
-    this.y += this.vy;
-    this.vy *= 0.97;
-    this.life--;
-    this.scale += (this.targetScale - this.scale) * 0.25;
-    if (this.life < 15) this.alpha = this.life / 15;
-    return this.life > 0;
-  }
-
-  draw(ctx) {
-    if (this.alpha <= 0) return;
-    ctx.save();
-    ctx.globalAlpha = this.alpha;
-    ctx.translate(this.x, this.y);
-    ctx.scale(this.scale, this.scale);
-    ctx.font = `bold ${this.fontSize}px "Outfit", "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    ctx.lineWidth = 4;
-    ctx.strokeText(this.text, 0, 0);
-    ctx.fillStyle = this.color;
-    ctx.fillText(this.text, 0, 0);
-    ctx.restore();
-  }
-}
-
-export class Game {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.W = GAME.WIDTH;
-    this.H = GAME.HEIGHT;
-    canvas.width = this.W;
-    canvas.height = this.H;
-
-    // 系统
-    this.particles = new ParticleSystem();
-    this.audio = new AudioManager();
-
-    // 锅的参数
-    this.wokBaseX = this.W / 2;
-    this.wokBaseY = 410;
-    this.wokX = this.wokBaseX;
-    this.wokY = this.wokBaseY;
-    this.wokRX = GAME.WOK_RX;
-    this.wokRY = GAME.WOK_RY;
-
-    // 锅的物理
-    this.wokTargetX = this.wokBaseX;
-    this.prevWokX = this.wokBaseX;
-    this.wokVelocity = 0;
-    this.prevWokVelocity = 0;
-    this.isDragging = false;
-
-    // 手的角度
-    this.handAngle = 0;
-
-    // 游戏状态
-    this.state = STATE.MENU;
-    this.score = 0;
-    this.timer = GAME.GAME_DURATION;
-    this.cookProgress = 0;
-    this.tossCount = 0;
-    this.bestTossHeight = 0;
-    this.tossCooldown = 0;
-    this.stars = 0;
-    this.dishesServed = 0;
-    this.totalScore = 0;
-
-    // 当前订单
-    this.currentOrder = null;
-    this.orderIndex = 0;
-
-    // 食材
-    this.foodItems = [];
-
-    // 特效
-    this.popups = [];
-    this.fireIntensity = 0.4;
-    this.shakeX = 0;
-    this.shakeY = 0;
-    this.shakeIntensity = 0;
-
-    // 背景缓存
-    this._bgGradient = null;
-
-    // 计时
-    this._timerAccum = 0;
-    this.lastTimestamp = 0;
-    this.frameCount = 0;
-
-    // 提示显示
-    this._hintVisible = true;
-    this._hintTimer = 0;
-
-    // 出餐动画
-    this._serveTimer = 0;
-    this._servePhase = 0;
-
-    // 绑定输入
-    this._setupInput();
-  }
-
-  // ==================== 输入 ====================
-
-  _setupInput() {
-    const getX = (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      return (clientX - rect.left) * (this.W / rect.width);
-    };
-
-    const getY = (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      return (clientY - rect.top) * (this.H / rect.height);
-    };
-
-    const onDown = (e) => {
-      if (this.state !== STATE.COOK) return;
-      this.isDragging = true;
-      this.wokTargetX = getX(e);
-    };
-
-    const onMove = (e) => {
-      if (!this.isDragging || this.state !== STATE.COOK) return;
-      e.preventDefault();
-      this.wokTargetX = getX(e);
-    };
-
-    const onUp = () => {
-      this.isDragging = false;
-    };
-
-    // 鼠标
-    this.canvas.addEventListener('mousedown', onDown);
-    this.canvas.addEventListener('mousemove', onMove);
-    this.canvas.addEventListener('mouseup', onUp);
-    this.canvas.addEventListener('mouseleave', onUp);
-
-    // 触摸
-    this.canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      onDown(e);
-    }, { passive: false });
-    this.canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      onMove(e);
-    }, { passive: false });
-    this.canvas.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      onUp();
-    }, { passive: false });
-  }
-
-  // ==================== 游戏控制 ====================
-
-  start() {
-    this.score = 0;
-    this.totalScore = 0;
-    this.timer = GAME.GAME_DURATION;
-    this.dishesServed = 0;
-    this.orderIndex = 0;
-    this.popups = [];
-    this.particles.clear();
-    this._timerAccum = 0;
-    this._hintVisible = true;
-    this._hintTimer = 0;
-
-    this.state = STATE.COOK;
-
-    document.getElementById('menu-screen').classList.add('hidden');
-    document.getElementById('result-screen').classList.add('hidden');
-    document.getElementById('hud').classList.remove('hidden');
-
-    this._loadOrder();
-  }
-
-  _loadOrder() {
-    // 根据进度选难度
-    const maxDiff = Math.min(5, 1 + Math.floor(this.dishesServed / 2));
-    const available = ORDERS.filter((o) => o.difficulty <= maxDiff);
-    this.currentOrder = available[Math.floor(Math.random() * available.length)];
-
-    this.cookProgress = 0;
-    this.tossCount = 0;
-    this.bestTossHeight = 0;
-    this.foodItems = [];
-
-    // 创建食材物理对象
-    const ings = this.currentOrder.ingredients;
-    ings.forEach((id, i) => {
-      const ing = INGREDIENTS.find((ii) => ii.id === id);
-      const offsetX = (i - (ings.length - 1) / 2) * 28;
-      const food = new FoodItem(ing, this.wokX + offsetX, this.wokY - 5);
-      food.baseX = offsetX;
-      this.foodItems.push(food);
     });
 
-    this.fireIntensity = 0.4;
-    this.wokX = this.wokBaseX;
-    this.wokTargetX = this.wokBaseX;
-    this.prevWokX = this.wokBaseX;
-
-    // 更新 UI
-    this._updateOrderUI();
-    this._updateProgressBar();
-    this._updateHUD();
-  }
-
-  // 颠锅！
-  _tossFood(force) {
-    const clampedForce = Math.min(20, force);
-
-    for (const food of this.foodItems) {
-      food.vy = -(clampedForce * 2.2 + Math.random() * 4);
-      food.vx = (Math.random() - 0.5) * clampedForce * 0.6;
-      food.rotVel = (Math.random() - 0.5) * 0.5;
-      food.isFlying = true;
-      food.settled = false;
-      food.flipped = false;
-    }
-
-    // 进度增加
-    const progressGain = Math.min(10, clampedForce * 0.4);
-    this.cookProgress = Math.min(100, this.cookProgress + progressGain);
-    this.score += Math.floor(clampedForce * 3);
-    this.tossCount++;
-
-    // 特效
-    this.particles.emitOilSplash(this.wokX, this.wokY, clampedForce * 0.08);
-    this.audio.playSizzle();
-    this.shakeIntensity = Math.min(8, clampedForce * 0.4);
-    this.fireIntensity = Math.min(1.8, 0.5 + clampedForce * 0.08);
-
-    // 隐藏提示
-    this._hintVisible = false;
-
-    // 弹出评价
-    if (clampedForce > 12) {
-      this.popups.push(new ScorePopup('🔥 完美颠锅!', this.wokX, this.wokY - 120, '#FFD700', 26));
-      this.audio.playPerfect();
-      this.particles.emitSparks(this.wokX, this.wokY - 30, 8);
-    } else if (clampedForce > 7) {
-      this.popups.push(new ScorePopup('好!', this.wokX, this.wokY - 100, '#87CEEB', 22));
-    }
-
-    this._updateProgressBar();
-    this._updateHUD();
-  }
-
-  // 出餐
-  _serveDish() {
-    this.state = STATE.SERVE;
-    this._serveTimer = 0;
-    this._servePhase = 0;
-
-    // 计算星级
-    if (this.tossCount >= 15 && this.cookProgress >= 100) {
-      this.stars = 3;
-    } else if (this.tossCount >= 8) {
-      this.stars = 2;
-    } else {
-      this.stars = 1;
-    }
-
-    const dishScore = Math.floor(this.currentOrder.baseScore * (0.5 + this.stars * 0.5));
-    this.score += dishScore;
-    this.totalScore += this.score;
-    this.dishesServed++;
-
-    // 特效
-    this.audio.playServe();
-    this.particles.emitCelebration(this.W / 2, this.H / 2);
-    this.shakeIntensity = 10;
-
-    this.popups.push(new ScorePopup(`+${dishScore}`, this.W / 2, 300, '#FFD700', 36));
-  }
-
-  // 游戏结束
-  _gameOver() {
-    this.state = STATE.RESULT;
-    this.audio.playGameOver();
-
-    // 选择成品图
-    let dishImage, gradeText;
-    if (this.stars >= 3) {
-      dishImage = 'assets/dishes/dish_premium.png';
-      gradeText = 'S';
-    } else if (this.stars >= 2) {
-      dishImage = 'assets/dishes/dish_classic.png';
-      gradeText = 'A';
-    } else {
-      dishImage = 'assets/dishes/dish_poor.png';
-      gradeText = 'B';
-    }
-
-    // 总评（基于总分）
-    if (this.totalScore >= 2000) gradeText = 'S';
-    else if (this.totalScore >= 1200) gradeText = 'A';
-    else if (this.totalScore >= 600) gradeText = 'B';
-    else gradeText = 'C';
-
-    // 更新结果界面
-    document.getElementById('dish-image').src = dishImage;
-    document.getElementById('dish-name').textContent =
-      this.currentOrder ? this.currentOrder.name : '炒粉';
-    document.getElementById('final-score').textContent = this.totalScore;
-    document.getElementById('dishes-count').textContent = `完成 ${this.dishesServed} 道菜`;
-    document.getElementById('toss-count').textContent = `颠锅 ${this.tossCount} 次`;
-    document.getElementById('grade').textContent = gradeText;
-    document.getElementById('grade').className = `grade grade-${gradeText.toLowerCase()}`;
-
-    // 星星
-    const starsEl = document.getElementById('result-stars');
-    starsEl.innerHTML = '';
-    for (let i = 0; i < 3; i++) {
-      const star = document.createElement('span');
-      star.className = `result-star ${i < this.stars ? 'star-on' : 'star-off'}`;
-      star.textContent = '⭐';
-      star.style.animationDelay = `${i * 0.2}s`;
-      starsEl.appendChild(star);
-    }
-
-    document.getElementById('hud').classList.add('hidden');
-
-    setTimeout(() => {
-      document.getElementById('result-screen').classList.remove('hidden');
-      document.getElementById('result-screen').classList.add('fade-in');
-    }, 300);
-  }
-
-  // ==================== 主循环 ====================
-
-  update(timestamp) {
-    const dt = Math.min(3, (timestamp - this.lastTimestamp) / 16.67) || 1;
-    this.lastTimestamp = timestamp;
-    this.frameCount++;
-
-    // 更新粒子
-    this.particles.update();
-    this.popups = this.popups.filter((p) => p.update());
-
-    // 屏幕震动衰减
-    if (this.shakeIntensity > 0) {
-      this.shakeX = (Math.random() - 0.5) * this.shakeIntensity;
-      this.shakeY = (Math.random() - 0.5) * this.shakeIntensity;
-      this.shakeIntensity *= 0.85;
-      if (this.shakeIntensity < 0.3) {
-        this.shakeIntensity = 0;
-        this.shakeX = 0;
-        this.shakeY = 0;
+    this.lever.onToss((force) => {
+      if (this.state === GameState.COOKING) {
+        this._handleToss(force);
       }
-    }
+    });
 
-    if (this.state === STATE.COOK) {
-      this._updateCook(dt);
-    } else if (this.state === STATE.SERVE) {
-      this._updateServe(dt);
+    // 绑定调料按钮点击事件
+    if (this.ui.seasoningBtn) {
+      this.ui.seasoningBtn.addEventListener('click', () => this.handleSeasoningClick());
+      this.ui.seasoningBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // 防止双重触发
+        this.handleSeasoningClick();
+      }, { passive: false });
     }
+    
+    this.state = GameState.INIT;
+    
+    // 动画循环参数
+    this.lastTime = performance.now();
+    this.animationId = null;
+
+    // 开始游戏循环
+    this._loop();
   }
 
-  _updateCook(dt) {
-    // 锅的物理
-    this.prevWokVelocity = this.wokVelocity;
-    this.prevWokX = this.wokX;
+  // --- 核心循环 ---
+  _loop() {
+    const now = performance.now();
+    const dt = Math.min((now - this.lastTime) / 1000, 0.1); // 限制最大增量
+    this.lastTime = now;
 
-    const clampedTarget = Math.max(90, Math.min(this.W - 90, this.wokTargetX));
+    // 更新 3D 物理
+    this.wok.update(dt);
+    this.foodSystem.update(dt, this.wok.getWorldCenter());
+    this.fireSystem.update(dt, this.wok.getWorldCenter());
+    
+    // 同步火焰光源与火焰系统的强度
+    this.scene.setFireIntensity(this.fireSystem.intensity);
+    
+    // 渲染 3D 场景
+    this.scene.render();
 
-    if (this.isDragging) {
-      this.wokX += (clampedTarget - this.wokX) * 0.25;
-    } else {
-      // 没拖拽时缓慢回中
-      this.wokX += (this.wokBaseX - this.wokX) * 0.03;
-    }
+    // 更新业务逻辑逻辑
+    this._updateLogic(dt);
 
-    this.wokVelocity = this.wokX - this.prevWokX;
-
-    // 锅的轻微上下颠动
-    this.wokY = this.wokBaseY + Math.sin(this.frameCount * 0.03) * 1.5;
-
-    // 手的倾斜角度
-    this.handAngle = this.wokVelocity * 0.015;
-
-    // 颠锅冷却
-    if (this.tossCooldown > 0) this.tossCooldown -= dt;
-
-    // 检测颠锅（加速度突变 = 急速变向）
-    const acceleration = this.wokVelocity - this.prevWokVelocity;
-    if (
-      Math.abs(acceleration) > 1.2 &&
-      this.tossCooldown <= 0 &&
-      this.isDragging
-    ) {
-      const force = Math.min(20, Math.abs(acceleration) * 2.5);
-      if (force > 2.5) {
-        this._tossFood(force);
-        this.tossCooldown = 10;
-      }
-    }
-
-    // 食材物理
-    for (const food of this.foodItems) {
-      food.update(this.wokX, this.wokY, this.wokRX);
-
-      // 追踪飞行高度
-      if (food.isFlying && !food.flipped && food.y < this.wokY - 80) {
-        food.flipped = true;
-        const height = this.wokY - food.y;
-        if (height > this.bestTossHeight) this.bestTossHeight = height;
-      }
-    }
-
-    // 火焰粒子
-    if (this.frameCount % 2 === 0) {
-      this.particles.emitFire(
-        this.wokX,
-        this.wokY + this.wokRY + 8,
-        this.wokRX * 1.4,
-        this.fireIntensity
-      );
-    }
-
-    // 蒸汽
-    if (this.frameCount % 6 === 0 && this.fireIntensity > 0.3) {
-      this.particles.emitSteam(
-        this.wokX,
-        this.wokY - this.wokRY * 0.8,
-        this.wokRX * 0.6
-      );
-    }
-
-    // 火焰强度衰减
-    this.fireIntensity = Math.max(0.35, this.fireIntensity * 0.995);
-
-    // 计时器
-    this._timerAccum += dt;
-    if (this._timerAccum >= 60) {
-      this._timerAccum -= 60;
-      this.timer--;
-      this._updateTimer();
-      if (this.timer <= 5 && this.timer > 0) this.audio.playTick();
-      if (this.timer <= 0) {
-        // 如果还在做菜，强制出餐
-        if (this.cookProgress > 0) {
-          this._serveDish();
-        } else {
-          this._gameOver();
-        }
-      }
-    }
-
-    // 检查进度满
-    if (this.cookProgress >= 100) {
-      this._serveDish();
-    }
-
-    // 提示动画
-    if (this._hintVisible) {
-      this._hintTimer += dt;
-    }
+    this.animationId = requestAnimationFrame(() => this._loop());
   }
 
-  _updateServe(dt) {
-    this._serveTimer += dt;
-    if (this._serveTimer > 120) {
-      // 出餐动画结束
-      if (this.timer > 0) {
-        // 还有时间，下一单
-        this.state = STATE.COOK;
-        this.score = 0;
-        this._loadOrder();
+  _updateLogic(dt) {
+    if (this.state === GameState.IDLE) {
+      // 待机状态：微弱火焰
+      this.fireSystem.setIntensity(0.1);
+    } 
+    else if (this.state === GameState.COOKING) {
+      // 炒菜状态：时间减少
+      this.gameTime -= dt;
+      if (this.gameTime <= 0) {
+        this.gameTime = 0;
+        this.gameOver();
       } else {
-        this._gameOver();
+        this.ui.timer.textContent = Math.ceil(this.gameTime);
+      }
+
+      // 如果满进度，进入调料阶段（需食材都在锅底，没有飞在空中）
+      if (this.stirringPower >= this.currentOrder.stirTarget && !this.foodSystem.hasFlying()) {
+        this.enterSeasoningPhase();
+      } else if (this.audio && this.foodSystem.hasFlying()) {
+        this.audio.stopSizzle();
+      }
+    } 
+    else if (this.state === GameState.SEASONING) {
+      // 调料小游戏
+      this.gameTime -= dt;
+      if (this.gameTime <= 0) this.gameTime = 0;
+      this.ui.timer.textContent = Math.ceil(this.gameTime);
+      
+      this.seasoningCurrentRadius -= GAME.SEASON_RING_SPEED * 60 * dt;
+      
+      if (this.seasoningCurrentRadius < 10) {
+        // 缩到底了没点属于 MISS
+        this.seasoningHints.push({ text: 'Miss...', type: 'miss' });
+        this.processSeasoningStep(0);
+      } else if (this.seasonCtx) {
+        this._drawSeasoningMiniGame();
       }
     }
   }
 
-  // ==================== 渲染 ====================
+  // --- 交互与事件 ---
+  
+  // 处理颠锅动作
+  _handleToss(force) {
+    // 物理反馈
+    const actualForce = this.wok.toss(force);
+    this.foodSystem.toss(actualForce, this.wok.getWorldCenter());
+    this.fireSystem.burst(this.wok.getWorldCenter());
+    
+    if (this.audio) {
+      this.audio.playToss(actualForce);
+      this.audio.stopSizzle();
+    }
+    
+    // 业务逻辑与得分
+    const stirAmount = 10 + actualForce * 20;
+    this.stirringPower += stirAmount;
+    
+    if (this.stirringPower > this.currentOrder.stirTarget) {
+      this.stirringPower = this.currentOrder.stirTarget;
+    }
+    
+    // 更新进度条
+    const progressPct = (this.stirringPower / this.currentOrder.stirTarget) * 100;
+    this.ui.progressBar.style.width = `${progressPct}%`;
+    
+    if (progressPct > 80 && this.ui.progressBar.className.indexOf('pulsing') === -1) {
+       this.ui.progressBar.classList.add('pulsing');
+    }
+    
+    // 震屏效果
+    this.scene.shake(actualForce * 0.3);
+  }
 
-  render() {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.translate(this.shakeX, this.shakeY);
+  handleSeasoningClick() {
+    if (this.state !== GameState.SEASONING) return;
+    
+    const diff = Math.abs(this.seasoningCurrentRadius - GAME.SEASON_TARGET_RADIUS);
+    let scoreMultiplier = 0;
+    let hintText = '';
+    let hintType = '';
+    
+    if (diff <= GAME.SEASON_PERFECT_RANGE) {
+      scoreMultiplier = 1.5;
+      hintText = 'Perfect!';
+      hintType = 'perfect';
+      this.combo++;
+      if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+      if (this.audio) this.audio.playSeasoning('perfect');
+    } else if (diff <= GAME.SEASON_GOOD_RANGE) {
+      scoreMultiplier = 1.0;
+      hintText = 'Good';
+      hintType = 'good';
+      this.combo++;
+      if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+      if (this.audio) this.audio.playSeasoning('good');
+    } else {
+      scoreMultiplier = 0.5;
+      hintText = 'Bad';
+      hintType = 'bad';
+      this.combo = 0;
+      if (this.audio) this.audio.playSeasoning('bad');
+    }
+    
+    this.seasoningHints.push({ text: hintText, type: hintType });
+    this.showFeedback(hintText, hintType);
+    this.updateCombo();
+    
+    // 特效
+    this.fireSystem.splashOil(this.wok.getWorldCenter(), scoreMultiplier);
+    
+    this.processSeasoningStep(scoreMultiplier);
+  }
 
-    this._drawBackground();
+  processSeasoningStep(multiplier) {
+    this.seasoningScore += this.currentOrder.baseScore * multiplier;
+    this.seasoningStepsDone++;
+    
+    if (this.seasoningStepsDone >= this.currentOrder.seasonings) {
+      // 这道菜完成了
+      this.finishDish();
+    } else {
+      // 下一次调料
+      this.seasoningCurrentRadius = 120 + Math.random() * 40;
+    }
+  }
 
-    if (this.state === STATE.COOK || this.state === STATE.SERVE) {
-      // 火焰（锅下方）
-      this._drawParticleLayer('fire');
-      // 锅
-      this._drawWok();
-      // 食材
-      this._drawFoodItems();
-      // 手
-      this._drawHand();
-      // 蒸汽（锅上方）
-      this._drawParticleLayer('steam');
-      // 其他粒子（油花、火星等）
-      this._drawParticleLayer('other');
+  // --- 状态流转 ---
+  
+  startGame() {
+    this.score = 0;
+    this.gameTime = GAME.GAME_DURATION;
+    this.dishesServed = 0;
+    this.combo = 0;
+    this.maxCombo = 0;
+    
+    this.ui.score.textContent = this.score;
+    this.ui.timer.textContent = this.gameTime;
+    
+    this.ui.menuScreen.classList.add('hidden');
+    this.ui.resultScreen.classList.add('hidden');
+    
+    this.updateCombo();
+    this.startNewOrder();
+  }
 
-      // 提示
-      if (this._hintVisible && this.state === STATE.COOK) {
-        this._drawHint();
+  startNewOrder() {
+    this.state = GameState.COOKING;
+    this.lever.show();
+    
+    // 随机一个订单（根据上菜数量渐进难度）
+    const maxDifficulty = Math.min(5, 1 + Math.floor(this.dishesServed / 3));
+    const availableOrders = ORDERS.filter(o => o.difficulty <= maxDifficulty);
+    this.currentOrder = availableOrders[Math.floor(Math.random() * availableOrders.length)];
+    
+    // 渲染左上角菜谱
+    this.ui.orderName.textContent = `${this.currentOrder.emoji} ${this.currentOrder.name}`;
+    this.ui.orderIngredients.innerHTML = '';
+    
+    const ingredientsData = this.currentOrder.ingredients.map(id => INGREDIENTS.find(i => i.id === id));
+    
+    ingredientsData.forEach(ing => {
+      if (!ing) return;
+      const span = document.createElement('span');
+      span.className = 'ingredient-icon';
+      span.textContent = ing.emoji;
+      span.style.color = ing.color;
+      this.ui.orderIngredients.appendChild(span);
+    });
+    
+    this.stirringPower = 0;
+    this.ui.progressBar.style.width = '0%';
+    this.ui.progressBar.classList.remove('pulsing');
+    
+    this.ui.cookingUI.classList.remove('hidden');
+    this.ui.seasoningUI.classList.add('hidden');
+    
+    // 发送食材到 3D 场景
+    this.foodSystem.load(ingredientsData, this.wok.getWorldCenter(), this.wok.radius, this.wok.depth);
+  }
+
+  enterSeasoningPhase() {
+    this.state = GameState.SEASONING;
+    this.lever.hide(); // 隐藏操作杆
+    
+    this.ui.cookingUI.classList.add('hidden');
+    this.ui.seasoningUI.classList.remove('hidden');
+    this.ui.seasoningHint.textContent = `需要调料 ${this.currentOrder.seasonings} 次！`;
+    
+    // 初始化调料系统
+    this.seasoningStepsDone = 0;
+    this.seasoningScore = 0;
+    this.seasoningCurrentRadius = 150;
+    this.seasoningHints = [];
+  }
+
+  finishDish() {
+    this.state = GameState.FINISH_DISH;
+    this.ui.seasoningUI.classList.add('hidden');
+    
+    // 计分
+    let finalScore = Math.floor(this.seasoningScore * (1 + this.combo * 0.1));
+    this.score += finalScore;
+    this.ui.score.textContent = this.score;
+    this.dishesServed++;
+    
+    if (this.audio) this.audio.playSuccess();
+    
+    // 增加时间奖励 (+3秒)
+    this.gameTime += 3;
+    this.showFeedback('+3s', 'perfect');
+    
+    // 显示 3D 起锅特效
+    this.fireSystem.burst(this.wok.getWorldCenter());
+
+    // 弹出成品展示 Modal
+    this.showDishModal(this.currentOrder, finalScore);
+  }
+
+  showDishModal(order, addScore) {
+    // 设置文案和星星
+    this.ui.dishName.textContent = order.name;
+    const stars = Math.min(3, Math.max(1, Math.floor((addScore / order.baseScore) / order.seasonings)));
+    this.ui.dishStars.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    
+    // 重置图片样式
+    this.ui.dishImg.className = 'dish-image'; 
+    this.ui.dishImg.style.display = 'block';
+
+    // 映射对应菜品展示图 (这里需要一些漂亮的现成图片或者 emoji 代替，目前展示大 emoji)
+    // 根据项目说明，应使用高质量成品图。由于没有具体 URL，在此模拟图片加载或大 Emoji 显示。
+    this.ui.dishImg.innerHTML = `<span style="font-size: 80px; text-shadow: 0 10px 20px rgba(0,0,0,0.5);">${order.emoji}</span>`;
+    // 若有真实图片，替换为：
+    // this.ui.dishImg.style.backgroundImage = `url('./assets/images/${order.name}.jpg')`;
+
+    this.ui.dishModal.classList.remove('hidden');
+
+    // 延迟2秒后自动进入下一道菜
+    setTimeout(() => {
+      this.ui.dishModal.classList.add('hidden');
+      if (this.gameTime > 0) {
+        this.startNewOrder();
+      } else {
+        this.gameOver();
       }
-    }
-
-    // 弹出文字
-    for (const popup of this.popups) popup.draw(ctx);
-
-    ctx.restore();
+    }, 2000);
   }
 
-  _drawBackground() {
-    const ctx = this.ctx;
-    if (!this._bgGradient) {
-      this._bgGradient = ctx.createLinearGradient(0, 0, 0, this.H);
-      this._bgGradient.addColorStop(0, '#1A0F0A');
-      this._bgGradient.addColorStop(0.4, '#2D1810');
-      this._bgGradient.addColorStop(1, '#1A0F0A');
-    }
-    ctx.fillStyle = this._bgGradient;
-    ctx.fillRect(0, 0, this.W, this.H);
-
-    // 暖光晕
-    if (this.fireIntensity > 0) {
-      const g = ctx.createRadialGradient(
-        this.wokX, this.wokY + this.wokRY + 15, 0,
-        this.wokX, this.wokY + this.wokRY + 15, 250 * this.fireIntensity
-      );
-      g.addColorStop(0, `rgba(255,100,20,${0.12 * this.fireIntensity})`);
-      g.addColorStop(0.5, `rgba(255,60,0,${0.04 * this.fireIntensity})`);
-      g.addColorStop(1, 'rgba(255,60,0,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, this.W, this.H);
-    }
+  gameOver() {
+    this.state = GameState.GAME_OVER;
+    this.lever.hide();
+    this.ui.cookingUI.classList.add('hidden');
+    this.ui.seasoningUI.classList.add('hidden');
+    this.ui.resultScreen.classList.remove('hidden');
+    this.ui.dishModal.classList.add('hidden');
+    
+    this.ui.finalScore.textContent = this.score;
+    this.ui.dishesServed.textContent = this.dishesServed;
+    this.ui.maxCombo.textContent = this.maxCombo;
+    
+    this.foodSystem.clear(); // 清空锅子
   }
 
-  _drawWok() {
-    const ctx = this.ctx;
-    const cx = this.wokX;
-    const cy = this.wokY;
-    const rx = this.wokRX;
-    const ry = this.wokRY;
+  // --- 辅助绘制层 ---
 
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(this.handAngle);
-    ctx.translate(-cx, -cy);
-
-    // 锅影
+  _drawSeasoningMiniGame() {
+    if (!this.seasonCtx) return;
+    const ctx = this.seasonCtx;
+    const cw = this.ui.seasoningCanvas.width;
+    const ch = this.ui.seasoningCanvas.height;
+    const cx = cw / 2;
+    const cy = ch / 2;
+    
+    ctx.clearRect(0, 0, cw, ch);
+    
+    // 绘制目标圈
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 14, rx + 12, ry + 6, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fill();
-
-    // 锅体
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    const metalGrad = ctx.createRadialGradient(cx - rx * 0.3, cy - ry * 0.3, 0, cx, cy, rx);
-    metalGrad.addColorStop(0, '#6A6A6A');
-    metalGrad.addColorStop(0.3, '#4A4A4A');
-    metalGrad.addColorStop(0.6, '#383838');
-    metalGrad.addColorStop(0.85, '#2A2A2A');
-    metalGrad.addColorStop(1, '#1A1A1A');
-    ctx.fillStyle = metalGrad;
-    ctx.fill();
-
-    // 锅内底
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 4, rx * 0.85, ry * 0.72, 0, 0, Math.PI * 2);
-    const innerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx * 0.85);
-    innerGrad.addColorStop(0, '#2A2218');
-    innerGrad.addColorStop(1, '#1A1510');
-    ctx.fillStyle = innerGrad;
-    ctx.fill();
-
-    // 油光
-    ctx.beginPath();
-    ctx.ellipse(cx - rx * 0.2, cy - ry * 0.1, rx * 0.3, ry * 0.2, -0.3, 0, Math.PI * 2);
-    const shine = ctx.createRadialGradient(cx - rx * 0.2, cy - ry * 0.1, 0, cx - rx * 0.2, cy - ry * 0.1, rx * 0.3);
-    shine.addColorStop(0, 'rgba(255,200,100,0.1)');
-    shine.addColorStop(1, 'rgba(255,200,100,0)');
-    ctx.fillStyle = shine;
-    ctx.fill();
-
-    // 锅沿
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(180,170,160,0.35)';
-    ctx.lineWidth = 2.5;
+    ctx.arc(cx, cy, GAME.SEASON_TARGET_RADIUS, 0, Math.PI * 2);
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([8, 8]);
     ctx.stroke();
-
-    ctx.restore();
-  }
-
-  _drawFoodItems() {
-    const ctx = this.ctx;
-    // 根据 Y 排序（远的先画）
-    const sorted = [...this.foodItems].sort((a, b) => a.y - b.y);
-
-    for (const food of sorted) {
-      ctx.save();
-      ctx.translate(food.x, food.y);
-      ctx.rotate(food.rotation);
-
-      // 阴影
-      ctx.font = `${food.size}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.globalAlpha = 0.25;
-      ctx.fillText(food.ingredient.emoji, 2, 3);
-
-      // 本体
-      ctx.globalAlpha = 1;
-      // 飞行中发光
-      if (food.isFlying) {
-        ctx.shadowColor = '#FFD700';
-        ctx.shadowBlur = 12;
-      }
-      ctx.fillText(food.ingredient.emoji, 0, 0);
-
-      ctx.restore();
+    ctx.setLineDash([]);
+    
+    // 绘制当前圈
+    ctx.beginPath();
+    ctx.arc(cx, cy, this.seasoningCurrentRadius, 0, Math.PI * 2);
+    
+    let color = '#FFF';
+    const diff = Math.abs(this.seasoningCurrentRadius - GAME.SEASON_TARGET_RADIUS);
+    if (diff <= GAME.SEASON_PERFECT_RANGE) {
+      color = '#32CD32'; // Perfect
+      ctx.lineWidth = 6;
+    } else if (diff <= GAME.SEASON_GOOD_RANGE) {
+      color = '#FFA500'; // Good
+      ctx.lineWidth = 4;
+    } else {
+      color = '#FF4500'; // Bad
+      ctx.lineWidth = 2;
     }
-  }
-
-  _drawHand() {
-    const ctx = this.ctx;
-    const cx = this.wokX;
-    const cy = this.wokY;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(this.handAngle);
-
-    // 锅柄
-    ctx.fillStyle = '#5C3D2E';
-    ctx.strokeStyle = '#4A2D1E';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(this.wokRX - 15, -10, 90, 20, 8);
-    ctx.fill();
+    
+    ctx.strokeStyle = color;
     ctx.stroke();
-
-    // 锅柄末端金属环
-    ctx.fillStyle = '#888';
-    ctx.beginPath();
-    ctx.roundRect(this.wokRX + 65, -12, 12, 24, 4);
-    ctx.fill();
-
-    // 手 ✋ emoji
-    ctx.font = '42px serif';
+    
+    // 绘制中心按钮指示
+    ctx.fillStyle = color;
+    ctx.font = '24px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🤚', this.wokRX + 85, 2);
-
-    ctx.restore();
+    ctx.fillText('TAP!', cx, cy);
   }
 
-  _drawParticleLayer(type) {
-    const ctx = this.ctx;
-    const wokY = this.wokY;
+  showFeedback(text, type) {
+    this.ui.feedbackText.textContent = text;
+    this.ui.feedbackText.className = 'feedback-text show ' + type;
+    
+    // 触发重绘以重新开始动画
+    void this.ui.feedbackText.offsetWidth;
+    
+    setTimeout(() => {
+      this.ui.feedbackText.classList.remove('show');
+    }, 1000);
+  }
 
-    for (const p of this.particles.particles) {
-      if (type === 'fire') {
-        if (p.y > wokY - 15 && !p.emoji && p.gravity <= 0) p.draw(ctx);
-      } else if (type === 'steam') {
-        if (p.y < wokY - 15 && p.gravity <= 0 && !p.emoji) p.draw(ctx);
-      } else {
-        if (p.gravity > 0 || p.emoji) p.draw(ctx);
-      }
+  updateCombo() {
+    if (this.combo >= 2) {
+      this.ui.comboText.textContent = `${this.combo}连击!`;
+      this.ui.comboText.classList.remove('hidden');
+      this.ui.comboText.classList.add('pop');
+      setTimeout(() => this.ui.comboText.classList.remove('pop'), 300);
+    } else {
+      this.ui.comboText.classList.add('hidden');
     }
-  }
-
-  _drawHint() {
-    const ctx = this.ctx;
-    const pulse = Math.sin(this._hintTimer * 0.08) * 0.3 + 0.7;
-
-    ctx.save();
-    ctx.globalAlpha = pulse * 0.8;
-    ctx.font = 'bold 18px "Noto Sans SC", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#FFD700';
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    ctx.lineWidth = 3;
-
-    const text = '👈 左右快速拖动来颠锅！👉';
-    ctx.strokeText(text, this.W / 2, this.wokY + this.wokRY + 80);
-    ctx.fillText(text, this.W / 2, this.wokY + this.wokRY + 80);
-
-    // 动画箭头
-    const arrowOffset = Math.sin(this._hintTimer * 0.12) * 20;
-    ctx.font = '28px serif';
-    ctx.fillText('👆', this.W / 2 + arrowOffset, this.wokY + this.wokRY + 120);
-
-    ctx.restore();
-  }
-
-  // ==================== UI ====================
-
-  _updateOrderUI() {
-    const el = document.getElementById('order-card');
-    const order = this.currentOrder;
-    document.getElementById('order-emoji').textContent = order.emoji;
-    document.getElementById('order-name').textContent = order.name;
-
-    const itemsEl = document.getElementById('order-ingredients');
-    itemsEl.innerHTML = order.ingredients
-      .map((id) => {
-        const ing = INGREDIENTS.find((i) => i.id === id);
-        return `<span class="order-item">${ing.emoji}</span>`;
-      })
-      .join('');
-
-    el.classList.remove('hidden');
-  }
-
-  _updateProgressBar() {
-    const fill = document.getElementById('cook-progress-fill');
-    if (fill) {
-      fill.style.width = `${this.cookProgress}%`;
-      if (this.cookProgress > 80) {
-        fill.style.background = 'linear-gradient(90deg, #FFD700, #FF6B35)';
-      } else if (this.cookProgress > 50) {
-        fill.style.background = 'linear-gradient(90deg, #FFA500, #FFD700)';
-      } else {
-        fill.style.background = 'linear-gradient(90deg, var(--primary), var(--primary-light))';
-      }
-    }
-    const pctEl = document.getElementById('cook-progress-pct');
-    if (pctEl) pctEl.textContent = `${Math.floor(this.cookProgress)}%`;
-  }
-
-  _updateHUD() {
-    const el = document.getElementById('score-value');
-    if (el) el.textContent = this.score;
-  }
-
-  _updateTimer() {
-    const el = document.getElementById('timer-value');
-    if (el) {
-      el.textContent = Math.max(0, this.timer);
-      if (this.timer <= 10) el.classList.add('timer-warn');
-      else el.classList.remove('timer-warn');
-    }
-  }
-
-  get isPlaying() {
-    return this.state === STATE.COOK || this.state === STATE.SERVE;
   }
 }

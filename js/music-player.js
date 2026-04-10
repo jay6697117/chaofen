@@ -315,3 +315,8 @@ export class MusicPlayer {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 }
+
+// 初始化助手函数
+export function initializeMusicPlayer() {
+  return new MusicPlayer();
+}

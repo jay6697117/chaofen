@@ -3,48 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="炒粉大师 — 颠锅炒粉休闲小游戏，左右拖动颠锅，炒出完美粉！">
+  <meta name="description" content="炒粉大师 3D 版 — 采用真实物理引擎与操作杆的巅峰厨艺体验。">
   <meta name="theme-color" content="#1A0F0A">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>炒粉大师 🍜</title>
+  <title>炒粉大师 3D 🍜</title>
+  
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/music-player.css">
+
+  <!-- Import map for Three.js -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
 </head>
 <body>
   <div id="app">
     <div id="game-wrapper">
-      <!-- 游戏画布 -->
-      <canvas id="game-canvas" width="480" height="720"></canvas>
+      
+      <!-- 3D 渲染容器 -->
+      <div id="game-container"></div>
 
       <!-- HUD 顶栏 -->
-      <div id="hud" class="hidden">
+      <div id="hud">
         <div class="hud-item">
           <span class="hud-label">分数</span>
-          <span id="score-value" class="hud-value score-text">0</span>
+          <span id="score" class="hud-value score-text">0</span>
         </div>
+        
+        <!-- 全局提示框 -->
+        <div id="feedback-container">
+            <span id="feedback-text" class="feedback-text"></span>
+            <span id="combo-text" class="combo-text hidden"></span>
+        </div>
+
         <div class="hud-item">
-          <span id="timer-value" class="hud-value timer-text">60</span>
+          <span id="timer" class="hud-value timer-text">60</span>
           <span class="hud-label">秒</span>
         </div>
       </div>
 
-      <!-- 订单卡片 + 进度条 -->
-      <div id="order-card" class="hidden glass-panel">
-        <div class="order-row">
-          <span id="order-emoji" class="order-emoji">🥢</span>
-          <span id="order-name" class="order-name">经典炒粉</span>
-          <span id="order-ingredients" class="order-items"></span>
+      <!-- 炒菜阶段 UI -->
+      <div id="cooking-ui" class="hidden">
+        <div id="order-info" class="glass-panel">
+          <div class="order-header">
+            <span id="order-name">经典炒粉</span>
+          </div>
+          <div id="order-ingredients" class="order-ingredients-list"></div>
+          
+          <div id="stir-progress" class="progress-bar">
+            <div class="progress-bar-fill"></div>
+            <span class="progress-pct">熟成度</span>
+          </div>
         </div>
-        <div id="cook-progress-bar">
-          <div id="cook-progress-fill"></div>
-          <span id="cook-progress-pct" class="progress-pct">0%</span>
+      </div>
+
+      <!-- 调料阶段 UI -->
+      <div id="seasoning-ui" class="hidden overlay-ui">
+        <h2 id="seasoning-hint" class="seasoning-title">需要调料</h2>
+        <div class="seasoning-game-container">
+          <canvas id="seasoning-canvas"></canvas>
+          <button id="seasoning-btn" class="seasoning-btn">添加!</button>
         </div>
+      </div>
+
+      <!-- 出锅展示 Modal -->
+      <div id="dish-modal" class="hidden overlay-ui glass-panel dish-modal">
+         <h1 class="dish-showcase-title">出锅啦！</h1>
+         <div id="dish-img" class="dish-image"></div>
+         <h2 id="dish-name" class="dish-title">炒粉</h2>
+         <div id="dish-stars" class="dish-stars">★★★</div>
       </div>
 
       <!-- 音效开关 -->
@@ -56,9 +95,9 @@
           <div class="title-glow"></div>
           <h1 class="game-title">
             <span class="title-emoji">🍜</span>
-            <span class="title-text">炒粉大师</span>
+            <span class="title-text">炒粉大师 3D</span>
           </h1>
-          <p class="subtitle">左右颠锅 · 炒出美味</p>
+          <p class="subtitle">极致真实的颠锅体验</p>
           <div class="menu-decoration">
             <span>🔥</span><span>🥢</span><span>🌶️</span><span>🥩</span><span>🔥</span>
           </div>
@@ -66,46 +105,49 @@
             <span class="btn-text">开始炒粉</span>
             <span class="btn-icon">🔥</span>
           </button>
-          <div class="menu-tips">
-            <p>👈 左右快速拖动 → 🍳 颠锅翻炒 → 🍽️ 出餐</p>
-          </div>
+          <button id="how-to-play-btn" class="secondary-btn">玩法说明</button>
+        </div>
+      </div>
+
+      <!-- 玩法说明 Modal -->
+      <div id="how-to-modal" class="screen hidden">
+        <div class="glass-panel how-to-panel">
+          <h2>如何游玩</h2>
+          <ul>
+            <li>👆 <strong>颠锅：</strong> 向上推动右侧操作杆！推得越快颠得越高。</li>
+            <li>🍳 <strong>火候：</strong> 持续颠锅保证食材均匀受热，进度条满了进入调味。</li>
+            <li>🧂 <strong>调料：</strong> 当金色外圈缩到绿圈时，点击“添加!”按钮。</li>
+            <li>🏆 <strong>高分：</strong> 完美调味触发连击，成品星级越高加分越多！</li>
+          </ul>
+          <button id="close-how-to" class="primary-btn">明白啦</button>
         </div>
       </div>
 
       <!-- 结果界面 -->
       <div id="result-screen" class="screen hidden">
-        <div class="result-content">
-          <!-- 成品图 -->
-          <div class="dish-showcase">
-            <div class="dish-glow"></div>
-            <img id="dish-image" class="dish-image" src="" alt="炒粉成品">
-            <div id="result-stars" class="result-stars"></div>
+        <div class="result-content glass-panel">
+          <h2 class="result-title">营业结束</h2>
+          <div class="result-score-row">
+            <span class="result-label">最终总分</span>
+            <span id="final-score" class="final-score">0</span>
           </div>
-          <!-- 信息 -->
-          <div class="result-info glass-panel">
-            <h2 id="dish-name" class="dish-title">经典炒粉</h2>
-            <div id="grade" class="grade grade-b">B</div>
-            <div class="result-score-row">
-              <span class="result-label">最终分数</span>
-              <span id="final-score" class="final-score">0</span>
+          <div class="result-stats">
+            <div class="stat-item">
+              <span>🍽️ 出餐：</span>
+              <span id="dishes-served">0</span>
             </div>
-            <div class="result-stats">
-              <div class="stat-item">
-                <span>🍽️</span>
-                <span id="dishes-count">完成 0 道菜</span>
-              </div>
-              <div class="stat-item">
-                <span>🍳</span>
-                <span id="toss-count">颠锅 0 次</span>
-              </div>
+            <div class="stat-item">
+              <span>🔥 最大连击：</span>
+              <span id="max-combo">0</span>
             </div>
-            <button id="restart-btn" class="primary-btn">
-              <span class="btn-text">再来一局</span>
-              <span class="btn-icon">🔄</span>
-            </button>
           </div>
+          <button id="restart-btn" class="primary-btn">
+            <span class="btn-text">再来一局</span>
+            <span class="btn-icon">🔄</span>
+          </button>
         </div>
       </div>
+
     </div>
   </div>
 

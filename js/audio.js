@@ -25,32 +25,71 @@ export class AudioManager {
     return gain;
   }
 
-  // 播放噪声（用于翻炒滋滋声）
-  playSizzle() {
+  // 开启持续播放的油煎声
+  playSizzle(intensity = 1) {
     if (!this.enabled) return;
     this._init();
-    const duration = 0.15;
+    
+    // 更新已有音量
+    if (this._sizzleGain) {
+      this._sizzleGain.gain.setTargetAtTime(this.volume * 0.4 * intensity, this.ctx.currentTime, 0.1);
+      return;
+    }
+
+    const duration = 2.0;
     const bufferSize = this.ctx.sampleRate * duration;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
 
     for (let i = 0; i < bufferSize; i++) {
-      // 带衰减的褐色噪声
-      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize) * 0.3;
+      data[i] = (Math.random() * 2 - 1) * 0.3; // 持平的白噪声
     }
 
-    const source = this.ctx.createBufferSource();
-    source.buffer = buffer;
+    this._sizzleSource = this.ctx.createBufferSource();
+    this._sizzleSource.buffer = buffer;
+    this._sizzleSource.loop = true; // 循环播放
 
-    // 带通滤波器 — 模拟油炸声
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.value = 3000 + Math.random() * 2000;
+    filter.frequency.value = 4000;
     filter.Q.value = 0.5;
 
-    source.connect(filter);
-    filter.connect(this._gain(this.volume * 0.4));
-    source.start();
+    this._sizzleGain = this._gain(this.volume * 0.4 * intensity);
+    this._sizzleSource.connect(filter);
+    filter.connect(this._sizzleGain);
+    this._sizzleSource.start();
+  }
+
+  // 停止油煎声
+  stopSizzle() {
+    if (this._sizzleSource) {
+      this._sizzleGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.1);
+      setTimeout(() => {
+        if (this._sizzleSource) {
+          this._sizzleSource.stop();
+          this._sizzleSource.disconnect();
+          this._sizzleSource = null;
+          this._sizzleGain = null;
+        }
+      }, 150);
+    }
+  }
+
+  // 颠锅声音别名
+  playToss(force = 1) {
+    this.playDrop();
+  }
+
+  // 成功别名
+  playSuccess() {
+    this.playServe();
+  }
+
+  // 调料判定别名
+  playSeasoning(type) {
+    if (type === 'perfect') this.playPerfect();
+    else if (type === 'good') this.playGood();
+    else this.playMiss();
   }
 
   // 食材入锅声
