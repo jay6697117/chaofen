@@ -95,10 +95,10 @@ export class FoodSystem {
   // 颠锅！给所有食材施加力
   toss(force, wokCenter) {
     for (const food of this.foods) {
-      // 向上抛 + 轻微随机偏移
-      food.vy = force * 10 + Math.random() * 3;
-      food.vx = (Math.random() - 0.5) * force * 3;
-      food.vz = (Math.random() - 0.5) * force * 2 - force * 1.5; // 略向前抛
+      // 优化：微调颠勺力度，让菜飞得稍微高一点，但依然保持在真实视野和屏幕内
+      food.vy = force * 8 + Math.random() * 2 + 1; // 适当增加向上加速度
+      food.vx = (Math.random() - 0.5) * force * 2;
+      food.vz = (Math.random() - 0.5) * force * 1.2 - force * 0.8; // 略向前抛
       food.isFlying = true;
       food.settled = false;
       food.flipped = false;

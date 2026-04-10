@@ -136,9 +136,13 @@ export class GameManager {
         this.ui.timer.textContent = Math.ceil(this.gameTime);
       }
 
-      // 如果满进度，进入调料阶段（需食材都在锅底，没有飞在空中）
-      if (this.stirringPower >= this.currentOrder.stirTarget && !this.foodSystem.hasFlying()) {
+      // 如果炒熟度达到一半且未调料过，进入调料阶段（需食材都在锅底，没有飞在空中）
+      if (this.stirringPower >= this.currentOrder.stirTarget / 2 && !this.seasoningPhaseDone && !this.foodSystem.hasFlying()) {
         this.enterSeasoningPhase();
+      } 
+      // 如果满进度且已经调料过了，则出锅
+      else if (this.stirringPower >= this.currentOrder.stirTarget && this.seasoningPhaseDone && !this.foodSystem.hasFlying()) {
+        this.finishDish();
       } else if (this.audio && this.foodSystem.hasFlying()) {
         this.audio.stopSizzle();
       }
@@ -175,8 +179,9 @@ export class GameManager {
       this.audio.stopSizzle();
     }
     
-    // 业务逻辑与得分
-    const stirAmount = 10 + actualForce * 20;
+    // 业务逻辑与得分: 减缓熟成的速度，增强游戏体验
+    // 之前是 10 + actualForce * 20 太快了，现在削减一半
+    const stirAmount = 3 + actualForce * 8;
     this.stirringPower += stirAmount;
     
     if (this.stirringPower > this.currentOrder.stirTarget) {
@@ -240,8 +245,8 @@ export class GameManager {
     this.seasoningStepsDone++;
     
     if (this.seasoningStepsDone >= this.currentOrder.seasonings) {
-      // 这道菜完成了
-      this.finishDish();
+      // 调料完成，返回继续炒菜！
+      this.resumeCookingPhase();
     } else {
       // 下一次调料
       this.seasoningCurrentRadius = 120 + Math.random() * 40;
@@ -271,8 +276,8 @@ export class GameManager {
     this.state = GameState.COOKING;
     this.lever.show();
     
-    // 随机一个订单（根据上菜数量渐进难度）
-    const maxDifficulty = Math.min(5, 1 + Math.floor(this.dishesServed / 3));
+    // 随机一个订单（根据上菜数量渐进难度，每做一道菜解锁新难度）
+    const maxDifficulty = Math.min(5, 1 + this.dishesServed);
     const availableOrders = ORDERS.filter(o => o.difficulty <= maxDifficulty);
     this.currentOrder = availableOrders[Math.floor(Math.random() * availableOrders.length)];
     
@@ -292,7 +297,8 @@ export class GameManager {
     });
     
     this.stirringPower = 0;
-    this.ui.progressBar.style.width = '0%';
+    this.seasoningPhaseDone = false; // 标记是否已经完成调料
+    this.ui.progressBar.style.width = '0%';    
     this.ui.progressBar.classList.remove('pulsing');
     
     this.ui.cookingUI.classList.remove('hidden');
@@ -315,6 +321,17 @@ export class GameManager {
     this.seasoningScore = 0;
     this.seasoningCurrentRadius = 150;
     this.seasoningHints = [];
+  }
+
+  resumeCookingPhase() {
+    this.seasoningPhaseDone = true;
+    this.state = GameState.COOKING;
+    this.lever.show(); // 重新显示操作杆
+    
+    this.ui.cookingUI.classList.remove('hidden');
+    this.ui.seasoningUI.classList.add('hidden');
+    
+    this.showFeedback('继续翻炒！', 'perfect');
   }
 
   finishDish() {
