@@ -112,6 +112,9 @@ export class Wok3D {
     endRing.position.set(0, -0.05, this.radius + this.handleLength - 0.25);
     this.body.add(endRing);
 
+    // === 厨师的手（握住锅把）===
+    this._buildChefHand();
+
     // === 油光反射 ===
     const shineGeom = new THREE.CircleGeometry(this.radius * 0.35, 16);
     const shineMat = new THREE.MeshBasicMaterial({
@@ -125,6 +128,107 @@ export class Wok3D {
     this.body.add(shine);
 
     this.scene.add(this.group);
+  }
+
+  // 构建厨师的手（握住锅把）
+  _buildChefHand() {
+    const handGroup = new THREE.Group();
+
+    // 皮肤材质
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: 0xe8b88a,
+      roughness: 0.65,
+      metalness: 0.05,
+    });
+
+    // 手掌（扁平的圆角方块）
+    const palmGeom = new THREE.BoxGeometry(0.38, 0.22, 0.5);
+    const palm = new THREE.Mesh(palmGeom, skinMat);
+    palm.castShadow = true;
+    handGroup.add(palm);
+
+    // 四根手指（弯曲握住锅把）
+    const fingerMat = skinMat;
+    const fingerPositions = [
+      { x: -0.12, z: -0.22 },
+      { x: -0.04, z: -0.25 },
+      { x:  0.04, z: -0.25 },
+      { x:  0.12, z: -0.22 },
+    ];
+
+    fingerPositions.forEach((pos, i) => {
+      const fingerGroup = new THREE.Group();
+      fingerGroup.position.set(pos.x, -0.04, pos.z);
+
+      // 手指第一节
+      const seg1Geom = new THREE.CapsuleGeometry(0.04, 0.16, 4, 8);
+      const seg1 = new THREE.Mesh(seg1Geom, fingerMat);
+      seg1.rotation.x = Math.PI * 0.35;
+      seg1.position.set(0, -0.06, -0.06);
+      seg1.castShadow = true;
+      fingerGroup.add(seg1);
+
+      // 手指第二节（弯曲部分，绕回锅把下方）
+      const seg2Geom = new THREE.CapsuleGeometry(0.035, 0.12, 4, 8);
+      const seg2 = new THREE.Mesh(seg2Geom, fingerMat);
+      seg2.rotation.x = Math.PI * 0.7;
+      seg2.position.set(0, -0.14, -0.02);
+      seg2.castShadow = true;
+      fingerGroup.add(seg2);
+
+      handGroup.add(fingerGroup);
+    });
+
+    // 大拇指（在手掌侧面向上握住）
+    const thumbGroup = new THREE.Group();
+    thumbGroup.position.set(0.2, 0.02, -0.05);
+
+    const thumb1Geom = new THREE.CapsuleGeometry(0.045, 0.14, 4, 8);
+    const thumb1 = new THREE.Mesh(thumb1Geom, skinMat);
+    thumb1.rotation.z = -Math.PI * 0.25;
+    thumb1.rotation.x = Math.PI * 0.15;
+    thumb1.castShadow = true;
+    thumbGroup.add(thumb1);
+
+    const thumb2Geom = new THREE.CapsuleGeometry(0.04, 0.1, 4, 8);
+    const thumb2 = new THREE.Mesh(thumb2Geom, skinMat);
+    thumb2.position.set(0.08, 0.08, -0.03);
+    thumb2.rotation.z = -Math.PI * 0.4;
+    thumb2.rotation.x = Math.PI * 0.2;
+    thumb2.castShadow = true;
+    thumbGroup.add(thumb2);
+
+    handGroup.add(thumbGroup);
+
+    // 手腕部分（连接手臂）
+    const wristGeom = new THREE.CapsuleGeometry(0.1, 0.3, 4, 8);
+    const wrist = new THREE.Mesh(wristGeom, skinMat);
+    wrist.position.set(0, 0, 0.35);
+    wrist.rotation.x = Math.PI / 2;
+    wrist.castShadow = true;
+    handGroup.add(wrist);
+
+    // 厨师袖口（白色布料）
+    const sleeveMat = new THREE.MeshStandardMaterial({
+      color: 0xf5f5f0,
+      roughness: 0.8,
+      metalness: 0.0,
+    });
+    const sleeveGeom = new THREE.CylinderGeometry(0.16, 0.14, 0.35, 12);
+    const sleeve = new THREE.Mesh(sleeveGeom, sleeveMat);
+    sleeve.position.set(0, 0, 0.6);
+    sleeve.rotation.x = Math.PI / 2;
+    sleeve.castShadow = true;
+    handGroup.add(sleeve);
+
+    // 放置手的位置 — 握在锅把中后段
+    const handleGripZ = this.radius + this.handleLength * 0.65;
+    handGroup.position.set(0, -0.05, handleGripZ);
+    // 稍微旋转手让指头朝下握住
+    handGroup.rotation.x = 0;
+
+    this.body.add(handGroup);
+    this.chefHand = handGroup;
   }
 
   // 操作杆实时控制（非颠锅状态下跟随操作杆）
