@@ -1,0 +1,689 @@
+/* ========================================
+   音乐播放器 — 可展开唱片式播放器
+   ======================================== */
+
+/* ---- 容器 ---- */
+#music-player {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  user-select: none;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+
+/* ---- 收起状态：触发入口 ---- */
+.mp-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 6px;
+  background: rgba(26, 15, 10, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 107, 53, 0.2);
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(255, 107, 53, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
+}
+
+.mp-trigger:hover {
+  transform: scale(1.05);
+  border-color: rgba(255, 107, 53, 0.4);
+  box-shadow:
+    0 6px 30px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(255, 107, 53, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.mp-trigger:active {
+  transform: scale(0.97);
+  transition-duration: 0.1s;
+}
+
+/* 展开后隐藏触发器 */
+.mp-expanded .mp-trigger {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.8);
+}
+
+/* ---- 唱片（收起状态） ---- */
+.mp-disc-wrapper {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.mp-disc {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #1a1a2e, #2d2d44, #1a1a2e, #2d2d44,
+    #1a1a2e, #2d2d44, #1a1a2e
+  );
+  position: relative;
+  animation: disc-spin 4s linear infinite;
+  animation-play-state: paused;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* 唱片纹路 */
+.mp-disc-groove {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+}
+
+.mp-disc-groove:first-of-type {
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+}
+
+.mp-disc-groove-2 {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+}
+
+.mp-disc-groove-3 {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+}
+
+/* 唱片中心标签 */
+.mp-disc-label {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FF6B35, #FF9F1C);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 6px rgba(255, 107, 53, 0.4);
+}
+
+.mp-note {
+  font-size: 7px;
+  color: white;
+  line-height: 1;
+  animation: disc-spin 4s linear infinite reverse;
+  animation-play-state: paused;
+}
+
+/* 唱针 */
+.mp-needle {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 14px;
+  height: 2px;
+  background: linear-gradient(90deg, #888, #ccc);
+  border-radius: 1px;
+  transform-origin: right center;
+  transform: rotate(-30deg);
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.mp-needle::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 6px;
+  height: 6px;
+  background: radial-gradient(circle, #ddd, #999);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ---- 歌曲信息（收起状态） ---- */
+.mp-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 90px;
+}
+
+.mp-song-name {
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #FFF5E6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.mp-artist {
+  font-size: 10px;
+  color: rgba(255, 245, 230, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+/* ---- 进度环（收起状态唱片上） ---- */
+.mp-progress-ring {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 40px;
+  height: 40px;
+  pointer-events: none;
+}
+
+.mp-progress-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.mp-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 2;
+}
+
+.mp-ring-fill {
+  fill: none;
+  stroke: #FF6B35;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease;
+  filter: drop-shadow(0 0 3px rgba(255, 107, 53, 0.4));
+}
+
+/* ========================================
+   展开面板
+   ======================================== */
+.mp-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 280px;
+  background: rgba(22, 12, 8, 0.95);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 107, 53, 0.18);
+  border-radius: 18px;
+  padding: 18px;
+  opacity: 0;
+  transform: translateY(-10px) scale(0.9);
+  transform-origin: top right;
+  pointer-events: none;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.7),
+    0 0 40px rgba(255, 107, 53, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 展开时显示面板 */
+.mp-expanded .mp-panel {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+/* ---- 面板头部 ---- */
+.mp-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 面板内的唱片（大号） */
+.mp-panel-disc-wrapper {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.mp-panel-disc {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #1a1a2e, #2d2d44, #1a1a2e, #2d2d44,
+    #1a1a2e, #2d2d44, #1a1a2e
+  );
+  position: relative;
+  animation: disc-spin 4s linear infinite;
+  animation-play-state: paused;
+  box-shadow:
+    0 0 0 2px rgba(255, 107, 53, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.mp-panel-disc .mp-disc-label {
+  width: 16px;
+  height: 16px;
+}
+
+.mp-panel-disc .mp-note {
+  font-size: 9px;
+}
+
+.mp-panel-disc .mp-disc-groove:first-of-type {
+  width: 38px;
+  height: 38px;
+  margin: -19px 0 0 -19px;
+}
+
+.mp-panel-disc .mp-disc-groove-2 {
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+}
+
+.mp-panel-disc .mp-disc-groove-3 {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+}
+
+.mp-panel-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-panel-song {
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFF5E6;
+  line-height: 1.3;
+}
+
+.mp-panel-artist {
+  font-size: 12px;
+  color: rgba(255, 245, 230, 0.5);
+  margin-top: 2px;
+}
+
+/* 关闭按钮 */
+.mp-close-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+  color: rgba(255, 245, 230, 0.5);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.mp-close-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFF5E6;
+  transform: rotate(90deg);
+}
+
+/* ---- 播放进度条 ---- */
+.mp-progress-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mp-progress-track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.mp-progress-track:hover {
+  height: 8px;
+}
+
+.mp-progress-track:hover .mp-progress-thumb {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.mp-progress-filled {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #FF6B35, #FF9F1C);
+  border-radius: 3px;
+  transition: width 0.15s ease;
+  box-shadow: 0 0 8px rgba(255, 107, 53, 0.3);
+}
+
+.mp-progress-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 14px;
+  height: 14px;
+  background: #FF9F1C;
+  border: 2px solid #FFF5E6;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 8px rgba(255, 159, 28, 0.4);
+  pointer-events: none;
+}
+
+.mp-time-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  color: rgba(255, 245, 230, 0.4);
+  font-weight: 600;
+}
+
+/* ---- 控制区 ---- */
+.mp-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* 播放/暂停按钮 */
+.mp-play-btn {
+  width: 42px;
+  height: 42px;
+  border: none;
+  background: linear-gradient(135deg, #FF6B35, #FF9F1C);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 4px 16px rgba(255, 107, 53, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.mp-play-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+  animation: mp-shimmer 3s ease infinite;
+}
+
+@keyframes mp-shimmer {
+  0% { left: -100%; }
+  50%, 100% { left: 100%; }
+}
+
+.mp-play-btn:hover {
+  transform: scale(1.12);
+  box-shadow: 0 6px 22px rgba(255, 107, 53, 0.5);
+}
+
+.mp-play-btn:active {
+  transform: scale(0.92);
+  transition-duration: 0.1s;
+}
+
+.mp-play-icon {
+  font-size: 16px;
+  color: white;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- 音量控制区 ---- */
+.mp-volume-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-vol-icon-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.mp-vol-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.1);
+}
+
+.mp-vol-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* 音量滑块容器 */
+.mp-volume-slider-wrapper {
+  position: relative;
+  flex: 1;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* 隐藏原生滑块，但保留交互 */
+.mp-volume-slider {
+  position: absolute;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* 自定义音量轨道 */
+.mp-volume-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mp-volume-filled {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 35%;
+  background: linear-gradient(90deg, #FF6B35, #FF9F1C);
+  border-radius: 2px;
+  transition: width 0.1s ease;
+  box-shadow: 0 0 6px rgba(255, 107, 53, 0.25);
+}
+
+/* hover 时轨道变粗 */
+.mp-volume-slider-wrapper:hover .mp-volume-track {
+  height: 6px;
+}
+
+.mp-volume-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 245, 230, 0.4);
+  min-width: 22px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ========================================
+   播放状态控制
+   ======================================== */
+
+/* 唱片旋转 — 收起状态 */
+.mp-playing .mp-disc {
+  animation-play-state: running;
+}
+
+.mp-playing .mp-trigger .mp-note {
+  animation-play-state: running;
+}
+
+.mp-playing .mp-needle {
+  transform: rotate(-10deg);
+}
+
+.mp-playing .mp-disc-label {
+  box-shadow: 0 0 10px rgba(255, 107, 53, 0.6);
+}
+
+/* 唱片旋转 — 展开面板内 */
+.mp-playing .mp-panel-disc {
+  animation-play-state: running;
+}
+
+.mp-playing .mp-panel-disc .mp-note {
+  animation-play-state: running;
+}
+
+/* 暂停状态 — 唱针收回 */
+.mp-paused .mp-needle {
+  transform: rotate(-30deg);
+}
+
+/* ========================================
+   动画
+   ======================================== */
+@keyframes disc-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 入场动画 */
+.mp-trigger {
+  animation: mp-slide-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
+}
+
+@keyframes mp-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(60px) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* 播放中呼吸光效 */
+.mp-playing .mp-trigger {
+  animation: mp-slide-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both,
+             mp-glow 2.5s ease-in-out infinite;
+}
+
+@keyframes mp-glow {
+  0%, 100% {
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.5),
+      0 0 20px rgba(255, 107, 53, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.5),
+      0 0 30px rgba(255, 107, 53, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* 展开面板时的光效 */
+.mp-expanded .mp-panel {
+  animation: mp-panel-glow 3s ease-in-out infinite;
+}
+
+@keyframes mp-panel-glow {
+  0%, 100% {
+    box-shadow:
+      0 12px 48px rgba(0, 0, 0, 0.7),
+      0 0 40px rgba(255, 107, 53, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  50% {
+    box-shadow:
+      0 12px 48px rgba(0, 0, 0, 0.7),
+      0 0 50px rgba(255, 107, 53, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ========================================
+   响应式
+   ======================================== */
+@media (max-width: 360px) {
+  .mp-info {
+    display: none;
+  }
+  .mp-trigger {
+    padding: 6px;
+    border-radius: 50%;
+  }
+  .mp-panel {
+    width: 260px;
+    right: -8px;
+  }
+}

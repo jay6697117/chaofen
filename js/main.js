@@ -1,10 +1,14 @@
 // 炒粉大师 — 入口文件
 
 import { Game } from './game.js';
+import { MusicPlayer } from './music-player.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById('game-canvas');
   const game = new Game(canvas);
+
+  // 初始化音乐播放器
+  const musicPlayer = new MusicPlayer();
 
   // 适配屏幕大小
   function resize() {
