@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="炒粉大师 — 一款精品休闲炒粉小游戏，滑动翻炒、节奏调味、追求完美连击！">
+  <meta name="theme-color" content="#1A0F0A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>炒粉大师 🍜</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="game-wrapper">
+      <!-- 游戏画布 -->
+      <canvas id="game-canvas" width="480" height="720"></canvas>
+
+      <!-- HUD 顶栏 -->
+      <div id="hud" class="hidden">
+        <div id="score-display" class="hud-item">
+          <span class="hud-label">分数</span>
+          <span id="score-value" class="hud-value">0</span>
+        </div>
+        <div id="combo-display" class="hud-item">
+          <span id="combo-value" class="hud-value combo-text">x1</span>
+        </div>
+        <div id="timer-display" class="hud-item">
+          <span id="timer-value" class="hud-value timer-text">60</span>
+          <span class="hud-label">秒</span>
+        </div>
+      </div>
+
+      <!-- 订单卡片 -->
+      <div id="order-card" class="hidden glass-panel">
+        <div id="order-emoji" class="order-emoji">🥢</div>
+        <div id="order-name" class="order-name">经典炒粉</div>
+        <div id="order-ingredients" class="order-items"></div>
+      </div>
+
+      <!-- 游戏提示 -->
+      <div id="game-prompt-prep" class="game-prompt hidden">
+        <span class="prompt-icon">👇</span>
+        <span class="prompt-text">点击食材加入锅中</span>
+      </div>
+      <div id="game-prompt-stir" class="game-prompt hidden">
+        <span class="prompt-icon">🔄</span>
+        <span class="prompt-text">在锅上画圈翻炒！</span>
+        <div id="stir-bar-container">
+          <div id="stir-bar">
+            <div id="stir-fill"></div>
+          </div>
+        </div>
+      </div>
+      <div id="game-prompt-season" class="game-prompt hidden">
+        <span class="prompt-icon">🧂</span>
+        <span class="prompt-text">圆圈对齐时点击！</span>
+      </div>
+
+      <!-- 星星评分 -->
+      <div id="stars-display" class="hidden"></div>
+
+      <!-- 食材栏 -->
+      <div id="ingredient-bar" class="hidden"></div>
+
+      <!-- 音效开关 -->
+      <button id="sound-toggle" class="sound-btn" title="音效开关">🔊</button>
+
+      <!-- 菜单界面 -->
+      <div id="menu-screen" class="screen">
+        <div class="menu-content">
+          <div class="title-glow"></div>
+          <h1 class="game-title">
+            <span class="title-emoji">🍜</span>
+            <span class="title-text">炒粉大师</span>
+          </h1>
+          <p class="subtitle">成为最强炒粉师傅</p>
+          <div class="menu-decoration">
+            <span>🔥</span><span>🥢</span><span>🌶️</span><span>🥩</span><span>🔥</span>
+          </div>
+          <button id="start-btn" class="primary-btn">
+            <span class="btn-text">开始炒粉</span>
+            <span class="btn-icon">🔥</span>
+          </button>
+          <div class="menu-tips">
+            <p>🍳 拖入食材 → 🔄 翻炒 → 🧂 调味 → ⭐ 出餐</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 结果界面 -->
+      <div id="result-screen" class="screen hidden">
+        <div class="result-content glass-panel">
+          <h2 class="result-title">⏰ 时间到！</h2>
+          <div id="grade" class="grade grade-c">C</div>
+          <div class="result-score">
+            <span class="result-label">最终分数</span>
+            <span id="final-score" class="final-score">0</span>
+          </div>
+          <div class="result-stats">
+            <div class="stat-item">
+              <span class="stat-icon">🍽️</span>
+              <span id="dishes-count" class="stat-text">完成 0 道菜</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-icon">🔥</span>
+              <span id="max-combo" class="stat-text">最高连击 x0</span>
+            </div>
+          </div>
+          <button id="restart-btn" class="primary-btn">
+            <span class="btn-text">再来一局</span>
+            <span class="btn-icon">🔄</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
