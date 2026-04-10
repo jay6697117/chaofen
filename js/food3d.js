@@ -89,34 +89,31 @@ function loadFoodTexture(ingId) {
       }
     } else {
       // 使用 Flood Fill 从角落扩展来检测背景区域
-      const bgMask = new Uint8Array(size * size); // 0=未知, 1=背景, 2=食材
+      const bgMask = new Uint8Array(size * size); // 0=未知, 1=背景
 
-      // 判断一个像素是否"像背景"（纯灰/白 或 纯黑）
+      // 判断一个像素是否"像背景"
+      // 棋盘格特征：灰色(~205,205,205) 和 白色(~255,255,255) 交替
       const isBgColor = (idx) => {
         const r = data[idx], g = data[idx+1], b = data[idx+2];
         // 纯黑（canvas 未绘制区域）
         if (r === 0 && g === 0 && b === 0) return true;
-        // 纯灰/白（棋盘格特征：RGB 差值很小，且整体高亮度）
+        // 棋盘格检测：RGB 各通道差值很小（接近灰度），且亮度较高
         const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
         const brightness = (r + g + b) / 3;
-        return maxDiff <= 5 && brightness > 185;
+        // 灰色格子 brightness≈205, 白色格子 brightness≈255
+        return maxDiff <= 8 && brightness > 180;
       };
 
-      // 判断两个像素颜色是否足够相近（用于 flood fill 扩展）
-      const colorClose = (idx1, idx2) => {
-        const dr = Math.abs(data[idx1] - data[idx2]);
-        const dg = Math.abs(data[idx1+1] - data[idx2+1]);
-        const db = Math.abs(data[idx1+2] - data[idx2+2]);
-        return dr < 30 && dg < 30 && db < 30;
-      };
-
-      // BFS Flood Fill 从角落开始
+      // BFS Flood Fill 从角落和边缘开始
       const queue = [];
+      // 种子点：四角 + 沿四边每隔一段距离取点
       const seedPoints = [
         [0, 0], [size-1, 0], [0, size-1], [size-1, size-1],
-        [1, 0], [0, 1], [size-2, 0], [size-1, 1],
-        [0, size-2], [1, size-1], [size-2, size-1], [size-1, size-2],
       ];
+      // 四边每隔 16 像素添加种子点
+      for (let i = 0; i < size; i += 16) {
+        seedPoints.push([i, 0], [i, size-1], [0, i], [size-1, i]);
+      }
 
       for (const [sx, sy] of seedPoints) {
         const si = sy * size + sx;
@@ -127,23 +124,28 @@ function loadFoodTexture(ingId) {
         }
       }
 
-      // BFS 扩展
-      const dirs = [-1, 1, -size, size];
+      // BFS 扩展 — 8 方向（含对角线），只要目标像素是背景色就扩展
+      // 不用 colorClose，因为棋盘格灰白交替差值≈50，用颜色相近判断会阻断
+      const dirs = [
+        -1, 1, -size, size,                     // 上下左右
+        -size - 1, -size + 1, size - 1, size + 1  // 对角线
+      ];
       while (queue.length > 0) {
         const ci = queue.shift();
-        const cIdx = ci * 4;
         const cx = ci % size;
+        const cy = (ci / size) | 0;
 
         for (const d of dirs) {
           const ni = ci + d;
           if (ni < 0 || ni >= size * size) continue;
-          // 防止水平越界
           const nx = ni % size;
-          if (Math.abs(d) === 1 && Math.abs(nx - cx) !== 1) continue;
+          const ny = (ni / size) | 0;
+          // 防止边界回绕：相邻像素的 x/y 坐标差不能超过 1
+          if (Math.abs(nx - cx) > 1 || Math.abs(ny - cy) > 1) continue;
           if (bgMask[ni] !== 0) continue;
 
           const nIdx = ni * 4;
-          if (isBgColor(nIdx) && colorClose(cIdx, nIdx)) {
+          if (isBgColor(nIdx)) {
             bgMask[ni] = 1;
             queue.push(ni);
           }
@@ -187,8 +189,8 @@ function loadFoodTexture(ingId) {
       }
     }
 
-    // 做一次边缘羽化，让食材边缘更自然
-    edgeFeather(data, size, size, 2);
+
+
 
     ctx.putImageData(imageData, 0, 0);
     texture.image = canvas;
@@ -307,28 +309,33 @@ export class FoodSystem {
         depthWrite: false,
       });
       const sprite = new THREE.Sprite(material);
+      sprite.renderOrder = 1; // 确保食材渲染在锅底油层之上
       const s = piece.scale;
       sprite.scale.set(s, s, s);
 
       // 随机初始旋转角度
       sprite.material.rotation = Math.random() * Math.PI * 2;
 
-      // 向日葵螺旋分布 — 均匀铺满锅面
+      // 紧密堆积分布 — 食材集中在锅底中心，互相重叠
       const goldenAngle = 2.399963;
-      const angle = i * goldenAngle + Math.random() * 0.3;
-      const maxR = wokRadius * 0.85;
-      const r = Math.sqrt((i + 0.5) / totalPieces) * maxR;
+      const angle = i * goldenAngle + Math.random() * 0.5;
+      // 大幅缩小分布半径，让食材紧密堆积在锅底
+      const maxR = wokRadius * 0.38;
+      // 使用更紧凑的分布，更多食材集中在中心
+      const r = Math.pow((i + 0.5) / totalPieces, 0.7) * maxR + Math.random() * 0.08;
 
       const food = new FoodItem(piece.ingredient, sprite, s);
       food.baseAngle = angle;
       food.baseR = r;
 
-      // 初始位置
+      // 初始位置 — 食材层叠堆积在锅底
       const t = r / wokRadius;
       const surfaceY = -wokDepth * (1 - t * t);
+      // 随机层叠高度
+      food.stackHeight = Math.random() * 0.15;
       sprite.position.set(
         wokCenter.x + Math.cos(angle) * r,
-        wokCenter.y + surfaceY + 0.42,
+        wokCenter.y + surfaceY + 0.58 + food.stackHeight,
         wokCenter.z + Math.sin(angle) * r
       );
 
@@ -357,6 +364,7 @@ export class FoodSystem {
       const sp = food.sprite;
 
       if (food.isFlying) {
+        // 飞行中：重力 + 空气阻力
         food.vy -= 18 * dt;
         food.vx *= 0.995;
         food.vz *= 0.995;
@@ -374,14 +382,14 @@ export class FoodSystem {
           food.flipped = true;
         }
 
-        // 碰撞检测
+        // 碰撞检测 — 与锅壁碰撞
         const dx = sp.position.x - wokCenter.x;
         const dz = sp.position.z - wokCenter.z;
         const r = Math.sqrt(dx * dx + dz * dz);
 
         if (r < this.wokRadius * 0.95) {
           const t = r / this.wokRadius;
-          const surfaceY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.4;
+          const surfaceY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.55;
 
           if (sp.position.y <= surfaceY) {
             sp.position.y = surfaceY;
@@ -397,9 +405,12 @@ export class FoodSystem {
               food.isFlying = false;
               food.settled = true;
               food.rotSpeed = 0;
+              // 记录落点的随机层叠高度
+              food.stackHeight = Math.random() * 0.12;
             }
           }
         } else {
+          // 超出锅面 — 拉回
           const pullAngle = Math.atan2(dz, dx);
           food.vx -= Math.cos(pullAngle) * 8 * dt;
           food.vz -= Math.sin(pullAngle) * 8 * dt;
@@ -410,20 +421,45 @@ export class FoodSystem {
           food.vy = 2;
         }
       } else if (food.settled) {
-        const wobble = Math.sin(Date.now() * 0.002 + food.baseAngle * 3) * 0.025;
+        // 自然堆积：食材落在当前位置，受向中心的柔和滑动力
+        const dx = sp.position.x - wokCenter.x;
+        const dz = sp.position.z - wokCenter.z;
+        const r = Math.sqrt(dx * dx + dz * dz);
+        const maxPileR = this.wokRadius * 0.35;
+
+        // 向锅底中心施加柔和聚拢力
+        if (r > 0.01) {
+          // 超出堆积范围的施加更强的力
+          const pullStrength = r > maxPileR ? 0.06 : 0.015;
+          sp.position.x -= (dx / r) * r * pullStrength;
+          sp.position.z -= (dz / r) * r * pullStrength;
+        }
+
+        // 食材之间的轻微推挤 — 防止完全重叠，视觉更自然
+        for (const other of this.foods) {
+          if (other === food || !other.settled) continue;
+          const ox = sp.position.x - other.sprite.position.x;
+          const oz = sp.position.z - other.sprite.position.z;
+          const dist = Math.sqrt(ox * ox + oz * oz);
+          const minDist = (food.baseScale + other.baseScale) * 0.12;
+          if (dist < minDist && dist > 0.001) {
+            const pushForce = (minDist - dist) * 0.02;
+            sp.position.x += (ox / dist) * pushForce;
+            sp.position.z += (oz / dist) * pushForce;
+          }
+        }
+
+        // Y 轴跟随锅面曲率 + 层叠高度
+        const rNew = Math.sqrt(
+          (sp.position.x - wokCenter.x) ** 2 +
+          (sp.position.z - wokCenter.z) ** 2
+        );
+        const t = rNew / this.wokRadius;
         const sizzle = Math.sin(Date.now() * 0.012 + food.baseAngle * 7) * 0.006;
-        const angle = food.baseAngle + wobble;
-        const r = food.baseR;
-
-        const targetX = wokCenter.x + Math.cos(angle) * r;
-        const targetZ = wokCenter.z + Math.sin(angle) * r;
-        const t = r / this.wokRadius;
-        const targetY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.42 + sizzle;
-
-        sp.position.x += (targetX - sp.position.x) * 0.12;
+        const targetY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.58 + sizzle + (food.stackHeight || 0);
         sp.position.y += (targetY - sp.position.y) * 0.12;
-        sp.position.z += (targetZ - sp.position.z) * 0.12;
 
+        // 恢复正常大小
         const s = food.baseScale;
         sp.scale.x += (s - sp.scale.x) * 0.1;
         sp.scale.y += (s - sp.scale.y) * 0.1;

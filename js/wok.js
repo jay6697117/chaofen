@@ -72,23 +72,8 @@ export class Wok3D {
     wokMesh.receiveShadow = true;
     this.body.add(wokMesh);
 
-    // === 锅内底面（深色弧面）===
-    const innerProfile = [];
-    for (let i = 0; i <= 20; i++) {
-      const t = i / 20;
-      const r = t * this.radius * 0.9;
-      const y = -this.depth * 0.95 * (1 - t * t) + 0.02;
-      innerProfile.push(new THREE.Vector2(r, y));
-    }
-    const innerGeom = new THREE.LatheGeometry(innerProfile, 36);
-    const innerMat = new THREE.MeshStandardMaterial({
-      color: 0x444444, // 提亮锅底暗斑，使其与锅更融合
-      roughness: 0.6,
-      metalness: 0.6,
-      side: THREE.FrontSide,
-    });
-    const innerMesh = new THREE.Mesh(innerGeom, innerMat);
-    this.body.add(innerMesh);
+
+
 
     // === 锅沿高光环 ===
     const rimGeom = new THREE.TorusGeometry(this.radius + 0.03, 0.025, 6, 48);
