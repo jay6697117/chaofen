@@ -21,7 +21,7 @@ export class SceneManager {
 
     // 场景
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1a0f0a);
+    this.scene.background = new THREE.Color(0x2c1f17); // 提亮背景颜色
 
     // 摄像机 — 45° 俯视角，锅把朝向玩家
     const aspect = container.clientWidth / container.clientHeight;
@@ -46,7 +46,7 @@ export class SceneManager {
 
   _setupLights() {
     // 环境光
-    const ambient = new THREE.AmbientLight(0x442211, 1.5);
+    const ambient = new THREE.AmbientLight(0x664433, 2.0); // 增加环境光强度和颜色
     this.scene.add(ambient);
 
     // 灶火点光源（在锅下方）— 强度可动态调节
@@ -55,7 +55,7 @@ export class SceneManager {
     this.scene.add(this.fireLight);
 
     // 顶部聚光灯（照亮锅面）
-    const spot = new THREE.SpotLight(0xffeecc, 5, 25, Math.PI / 5, 0.4);
+    const spot = new THREE.SpotLight(0xfff5ee, 6.5, 25, Math.PI / 4, 0.4); // 扩大聚光灯和强度
     spot.position.set(2, 12, 4);
     spot.target.position.set(0, 0, 0);
     spot.castShadow = true;
@@ -64,16 +64,16 @@ export class SceneManager {
     this.scene.add(spot.target);
 
     // 后侧补光
-    const backLight = new THREE.DirectionalLight(0xffaa66, 0.4);
+    const backLight = new THREE.DirectionalLight(0xffcc88, 0.8); // 增加背光
     backLight.position.set(-3, 5, -3);
     this.scene.add(backLight);
   }
 
   _setupEnvironment() {
-    // 台面 — 深色木纹
+    // 台面 — 增加亮度的木纹色
     const tableGeom = new THREE.PlaneGeometry(24, 24);
     const tableMat = new THREE.MeshStandardMaterial({
-      color: 0x1c1008,
+      color: 0x3d281a,
       roughness: 0.85,
       metalness: 0.05,
     });
@@ -86,9 +86,9 @@ export class SceneManager {
     // 灶台 — 圆形金属
     const stoveGeom = new THREE.CylinderGeometry(2.2, 2.5, 0.5, 32);
     const stoveMat = new THREE.MeshStandardMaterial({
-      color: 0x2a2a2a,
-      roughness: 0.5,
-      metalness: 0.6,
+      color: 0x3d3d3d, // 提亮金属颜色
+      roughness: 0.4,
+      metalness: 0.7,
     });
     const stove = new THREE.Mesh(stoveGeom, stoveMat);
     stove.position.y = 0;

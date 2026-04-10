@@ -76,9 +76,9 @@ export class Wok3D {
     }
     const innerGeom = new THREE.LatheGeometry(innerProfile, 36);
     const innerMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1510,
-      roughness: 0.75,
-      metalness: 0.3,
+      color: 0x444444, // 提亮锅底暗斑，使其与锅更融合
+      roughness: 0.6,
+      metalness: 0.6,
       side: THREE.FrontSide,
     });
     const innerMesh = new THREE.Mesh(innerGeom, innerMat);

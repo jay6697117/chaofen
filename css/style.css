@@ -12,7 +12,7 @@
   --primary: #FF6B35;
   --primary-light: #FF9F1C;
   --accent: #FFD700;
-  --bg-dark: #1A0F0A;
+  --bg-dark: #2C1A11;
   --text: #FFF5E6;
   --text-dim: rgba(255, 245, 230, 0.6);
   --glass-bg: rgba(0, 0, 0, 0.4);
@@ -25,7 +25,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000;
+  background: #111;
   font-family: var(--font-cn);
   color: var(--text);
   -webkit-tap-highlight-color: transparent;
@@ -48,8 +48,8 @@ html, body {
   height: 100%;
   max-height: 850px;
   overflow: hidden;
-  background: #111;
-  box-shadow: 0 0 60px rgba(255, 107, 53, 0.05);
+  background: #1c130e;
+  box-shadow: 0 0 60px rgba(255, 107, 53, 0.1);
 }
 
 @media (min-width: 481px) {
@@ -226,8 +226,8 @@ html, body {
 /* ---- 操作杆 (lever.js) ---- */
 #lever-control {
   position: absolute;
-  right: 30px;
-  bottom: 60px;
+  right: 16px;
+  bottom: 0px;
   width: 60px;
   height: 350px;
   z-index: 40;
@@ -396,7 +396,7 @@ html, body {
   align-items: center;
   justify-content: center;
   z-index: 50;
-  background: radial-gradient(ellipse at center, rgba(45,24,16,0.95), rgba(13,7,5,0.98));
+  background: radial-gradient(ellipse at center, rgba(65,34,22,0.95), rgba(30,16,10,0.95));
 }
 
 .menu-content, .result-content, .how-to-panel {
@@ -411,6 +411,9 @@ html, body {
 .how-to-panel {
   max-width: 90%;
   text-align: left;
+  background: rgba(0,0,0,0.6); /* Added slight backing so it's readable if background is brighter */
+  border-radius: 12px;
+  padding: 20px;
 }
 
 .how-to-panel h2 {
@@ -440,7 +443,12 @@ html, body {
 }
 
 .dish-image {
-  font-size: 100px;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 215, 0, 0.3);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(255, 159, 28, 0.2);
+  margin: 10px 0;
   animation: dish-reveal 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 

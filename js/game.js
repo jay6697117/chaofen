@@ -350,11 +350,20 @@ export class GameManager {
     this.ui.dishImg.className = 'dish-image'; 
     this.ui.dishImg.style.display = 'block';
 
-    // 映射对应菜品展示图 (这里需要一些漂亮的现成图片或者 emoji 代替，目前展示大 emoji)
-    // 根据项目说明，应使用高质量成品图。由于没有具体 URL，在此模拟图片加载或大 Emoji 显示。
-    this.ui.dishImg.innerHTML = `<span style="font-size: 80px; text-shadow: 0 10px 20px rgba(0,0,0,0.5);">${order.emoji}</span>`;
-    // 若有真实图片，替换为：
-    // this.ui.dishImg.style.backgroundImage = `url('./assets/images/${order.name}.jpg')`;
+    // 映射对应菜品展示图
+    const imgMap = {
+      '经典炒粉': 'dish_classic.png',
+      '牛肉炒粉': 'dish_beef.png',
+      '海鲜炒粉': 'dish_seafood.png',
+      '麻辣炒粉': 'dish_spicy.png',
+      '大师炒粉': 'dish_master.png'
+    };
+    const imgPath = imgMap[order.name] || 'dish_classic.png';
+    
+    this.ui.dishImg.innerHTML = '';
+    this.ui.dishImg.style.backgroundImage = `url('assets/images/${imgPath}')`;
+    this.ui.dishImg.style.backgroundSize = 'cover';
+    this.ui.dishImg.style.backgroundPosition = 'center';
 
     this.ui.dishModal.classList.remove('hidden');
 

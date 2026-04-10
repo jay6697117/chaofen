@@ -68,7 +68,7 @@ export class FoodSystem {
         depthWrite: false,
       });
       const sprite = new THREE.Sprite(material);
-      sprite.scale.set(0.6, 0.6, 0.6);
+      sprite.scale.set(0.9, 0.9, 0.9); // 放大食材
 
       // 在锅内分散排列
       const angle = (i / ingredients.length) * Math.PI * 2 + Math.random() * 0.5;
@@ -83,7 +83,7 @@ export class FoodSystem {
       const surfaceY = -wokDepth * (1 - t * t);
       sprite.position.set(
         wokCenter.x + Math.cos(angle) * r,
-        wokCenter.y + surfaceY + 0.3,
+        wokCenter.y + surfaceY + 0.45, // 稍微抬高防止穿模
         wokCenter.z + Math.sin(angle) * r
       );
 
@@ -127,8 +127,8 @@ export class FoodSystem {
         // 旋转（Sprite 的 material.rotation）
         sp.material.rotation += food.rotSpeed * dt;
 
-        // 飞行中发光
-        sp.scale.set(0.7, 0.7, 0.7);
+        // 飞行中发光放大
+        sp.scale.set(1.0, 1.0, 1.0);
 
         // 翻转标记（飞到最高点）
         if (!food.flipped && food.vy < 0) {
@@ -142,7 +142,7 @@ export class FoodSystem {
 
         if (r < this.wokRadius * 0.95) {
           const t = r / this.wokRadius;
-          const surfaceY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.25;
+          const surfaceY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.4; // 调整接触面高度
 
           if (sp.position.y <= surfaceY) {
             sp.position.y = surfaceY;
@@ -181,14 +181,14 @@ export class FoodSystem {
         const targetX = wokCenter.x + Math.cos(angle) * r;
         const targetZ = wokCenter.z + Math.sin(angle) * r;
         const t = r / this.wokRadius;
-        const targetY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.25;
+        const targetY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.4;
 
         sp.position.x += (targetX - sp.position.x) * 0.12;
         sp.position.y += (targetY - sp.position.y) * 0.12;
         sp.position.z += (targetZ - sp.position.z) * 0.12;
 
         // 恢复正常大小
-        sp.scale.lerp(new THREE.Vector3(0.6, 0.6, 0.6), 0.1);
+        sp.scale.lerp(new THREE.Vector3(0.9, 0.9, 0.9), 0.1);
       }
     }
   }

@@ -109,9 +109,10 @@ export class LeverControl {
           ? velocitySamples.reduce((a, b) => a + b, 0) / velocitySamples.length
           : 0;
 
-      // 判断颠锅：速度够快 + 位置够高
-      if (avgVel > 150 && this.value > 0.2) {
-        const force = Math.min(1, avgVel / 800);
+      // 判断颠锅：难度降低，只要轻微滑动就能触发
+      if (avgVel > 30 && this.value >= 0.05) {
+        // 轻推保底 0.4 力度，很容易达到抛飞效果
+        const force = Math.min(1, avgVel / 350 + 0.4);
         if (this._onToss) this._onToss(force);
       }
 
