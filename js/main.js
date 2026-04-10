@@ -39,6 +39,8 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  const backBtn = document.getElementById('back-btn');
+
   function initGame() {
     if (!audioEngine) {
       try {
@@ -61,6 +63,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
   startBtn.addEventListener('click', initGame);
   restartBtn.addEventListener('click', initGame);
+
+  // 返回首页按钮
+  backBtn.addEventListener('click', () => {
+    if (gameManager) {
+      gameManager.backToMenu();
+    }
+  });
 
   // 玩法说明 Modal
   howToPlayBtn.addEventListener('click', () => {

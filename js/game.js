@@ -439,6 +439,29 @@ export class GameManager {
     this.foodSystem.clear(); // 清空锅子
   }
 
+  // 返回首页菜单
+  backToMenu() {
+    this.state = GameState.IDLE;
+    this.lever.hide();
+    
+    // 隐藏所有游戏 UI
+    this.ui.cookingUI.classList.add('hidden');
+    this.ui.seasoningUI.classList.add('hidden');
+    this.ui.resultScreen.classList.add('hidden');
+    this.ui.dishModal.classList.add('hidden');
+    
+    // 显示菜单
+    this.ui.menuScreen.classList.remove('hidden');
+    
+    // 停止音效
+    if (this.audio) {
+      this.audio.stopSizzle();
+    }
+    
+    // 清空锅里的食材
+    this.foodSystem.clear();
+  }
+
   // --- 辅助绘制层 ---
 
   _drawSeasoningMiniGame() {
