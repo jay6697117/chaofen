@@ -363,9 +363,10 @@ export class GameManager {
     const stars = Math.min(3, Math.max(1, Math.floor((addScore / order.baseScore) / order.seasonings)));
     this.ui.dishStars.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
     
-    // 重置图片样式
+    // 重置图片容器
     this.ui.dishImg.className = 'dish-image'; 
     this.ui.dishImg.style.display = 'block';
+    this.ui.dishImg.style.backgroundImage = 'none'; // 清除旧的背景图
 
     // 映射对应菜品展示图
     const imgMap = {
@@ -377,10 +378,22 @@ export class GameManager {
     };
     const imgPath = imgMap[order.name] || 'dish_classic.png';
     
+    // 使用 img 标签替代 background-image，提升微信浏览器兼容性
     this.ui.dishImg.innerHTML = '';
-    this.ui.dishImg.style.backgroundImage = `url('assets/images/${imgPath}')`;
-    this.ui.dishImg.style.backgroundSize = 'cover';
-    this.ui.dishImg.style.backgroundPosition = 'center';
+    const imgEl = document.createElement('img');
+    imgEl.src = `assets/images/${imgPath}`;
+    imgEl.alt = order.name;
+    imgEl.className = 'dish-image-inner';
+    imgEl.draggable = false;
+    // 如果图片加载失败，用 emoji 做兜底
+    imgEl.onerror = () => {
+      imgEl.style.display = 'none';
+      this.ui.dishImg.textContent = order.emoji || '🍜';
+      this.ui.dishImg.style.fontSize = '80px';
+      this.ui.dishImg.style.lineHeight = '240px';
+      this.ui.dishImg.style.textAlign = 'center';
+    };
+    this.ui.dishImg.appendChild(imgEl);
 
     this.ui.dishModal.classList.remove('hidden');
 

@@ -219,19 +219,25 @@ export class MusicPlayer {
     });
 
     // 监听全局首次交互，用于触发自动播放
+    // 移动端（尤其微信浏览器）需要在真正的用户交互中调用 play()
+    const interactionEvents = ['click', 'touchend', 'touchstart', 'pointerdown', 'keydown'];
     const interactionHandler = () => {
       if (!this.hasInteracted) {
         this.hasInteracted = true;
         this.play();
-        document.removeEventListener('click', interactionHandler);
-        document.removeEventListener('touchstart', interactionHandler);
-        document.removeEventListener('keydown', interactionHandler);
+        interactionEvents.forEach(evt => document.removeEventListener(evt, interactionHandler, true));
       }
     };
 
-    document.addEventListener('click', interactionHandler);
-    document.addEventListener('touchstart', interactionHandler);
-    document.addEventListener('keydown', interactionHandler);
+    // 使用 capture: true 确保即使子元素 stopPropagation 也能捕获到
+    interactionEvents.forEach(evt => document.addEventListener(evt, interactionHandler, true));
+
+    // 微信浏览器专用：WeixinJSBridge 就绪后尝试播放
+    if (typeof WeixinJSBridge !== 'undefined') {
+      this._wxAutoPlay();
+    } else {
+      document.addEventListener('WeixinJSBridgeReady', () => this._wxAutoPlay(), false);
+    }
   }
 
   // 尝试自动播放
@@ -245,6 +251,21 @@ export class MusicPlayer {
       }).catch(() => {
         // 浏览器阻止了自动播放，等待用户交互
       });
+    }
+  }
+
+  // 微信浏览器自动播放支持
+  _wxAutoPlay() {
+    if (this.hasInteracted) return;
+    try {
+      WeixinJSBridge.invoke('getNetworkType', {}, () => {
+        if (!this.hasInteracted) {
+          this.hasInteracted = true;
+          this.play();
+        }
+      });
+    } catch(e) {
+      // WeixinJSBridge 不可用，忽略
     }
   }
 

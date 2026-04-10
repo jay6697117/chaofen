@@ -5,7 +5,7 @@ import { AudioManager } from './audio.js';
 import { MusicPlayer } from './music-player.js';
 
 window.addEventListener('DOMContentLoaded', () => {
-  // 预加载由于文件较大 (800KB+) 而可能导致展示时为空白的高清菜品图
+  // 预加载菜品高清图（存到全局避免被 GC 释放缓存）
   const preloadImages = [
     'assets/images/dish_classic.png',
     'assets/images/dish_beef.png',
@@ -13,9 +13,12 @@ window.addEventListener('DOMContentLoaded', () => {
     'assets/images/dish_spicy.png',
     'assets/images/dish_master.png'
   ];
-  preloadImages.forEach(src => {
+  window.__preloadedDishImages = preloadImages.map(src => {
     const img = new Image();
     img.src = src;
+    // 微信浏览器兼容：设置 crossOrigin 避免跨域缓存失效问题
+    // img.crossOrigin = 'anonymous'; // 如果是同域资源不需要
+    return img;
   });
 
   // DOM 元素防抖绑定
