@@ -12,8 +12,8 @@ const FOOD_IMAGES = {
   'egg': 'assets/images/food_egg.png',
   'onion': 'assets/images/food_onion.png',
   'chili': 'assets/images/food_chili.png',
-  'shrimp': 'assets/images/food_shrimp.png',
-  'vegetable': 'assets/images/food_vegetable.png',
+  'shrimp': 'assets/images/food_shrimp.jpg',
+  'vegetable': 'assets/images/food_vegetable.jpg',
   'mushroom': 'assets/images/food_mushroom.png',
 };
 
