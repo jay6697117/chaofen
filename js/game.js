@@ -386,13 +386,13 @@ export class GameManager {
 
     // 映射对应菜品展示图
     const imgMap = {
-      '经典炒粉': 'dish_classic.png',
-      '牛肉炒粉': 'dish_beef.png',
-      '海鲜炒粉': 'dish_seafood.png',
-      '麻辣炒粉': 'dish_spicy.png',
-      '大师炒粉': 'dish_master.png'
+      '经典炒粉': 'dish_classic.jpg',
+      '牛肉炒粉': 'dish_beef.jpg',
+      '海鲜炒粉': 'dish_seafood.jpg',
+      '麻辣炒粉': 'dish_spicy.jpg',
+      '大师炒粉': 'dish_master.jpg'
     };
-    const imgPath = imgMap[order.name] || 'dish_classic.png';
+    const imgPath = imgMap[order.name] || 'dish_classic.jpg';
     
     // 使用 img 标签替代 background-image，提升微信浏览器兼容性
     this.ui.dishImg.innerHTML = '';

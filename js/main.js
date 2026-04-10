@@ -7,11 +7,11 @@ import { MusicPlayer } from './music-player.js';
 window.addEventListener('DOMContentLoaded', () => {
   // 预加载菜品高清图（存到全局避免被 GC 释放缓存）
   const preloadImages = [
-    'assets/images/dish_classic.png',
-    'assets/images/dish_beef.png',
-    'assets/images/dish_seafood.png',
-    'assets/images/dish_spicy.png',
-    'assets/images/dish_master.png'
+    'assets/images/dish_classic.jpg',
+    'assets/images/dish_beef.jpg',
+    'assets/images/dish_seafood.jpg',
+    'assets/images/dish_spicy.jpg',
+    'assets/images/dish_master.jpg'
   ];
   window.__preloadedDishImages = preloadImages.map(src => {
     const img = new Image();

@@ -7,14 +7,14 @@ const textureCache = new Map();
 
 // 所有食材的真实图片映射
 const FOOD_IMAGES = {
-  'noodles': 'assets/images/food_noodles.png',
-  'beef': 'assets/images/food_beef.png',
-  'egg': 'assets/images/food_egg.png',
-  'onion': 'assets/images/food_onion.png',
-  'chili': 'assets/images/food_chili.png',
+  'noodles': 'assets/images/food_noodles.jpg',
+  'beef': 'assets/images/food_beef.jpg',
+  'egg': 'assets/images/food_egg.jpg',
+  'onion': 'assets/images/food_onion.jpg',
+  'chili': 'assets/images/food_chili.jpg',
   'shrimp': 'assets/images/food_shrimp.jpg',
   'vegetable': 'assets/images/food_vegetable.jpg',
-  'mushroom': 'assets/images/food_mushroom.png',
+  'mushroom': 'assets/images/food_mushroom.jpg',
 };
 
 // 每种食材在锅中的份数 — 要足够多才像真正在炒菜
