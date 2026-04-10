@@ -240,9 +240,9 @@ html, body {
 
 .progress-bar {
   width: 150px;
-  height: 16px;
+  height: 22px;
   background: rgba(0, 0, 0, 0.45);
-  border-radius: 8px;
+  border-radius: 11px;
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 200, 120, 0.12);

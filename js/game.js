@@ -261,6 +261,7 @@ export class GameManager {
     this.dishesServed = 0;
     this.combo = 0;
     this.maxCombo = 0;
+    this.lastOrderName = null; // 记录上一道菜，避免连续重复
     
     this.ui.score.textContent = this.score;
     this.ui.timer.textContent = this.gameTime;
@@ -276,10 +277,15 @@ export class GameManager {
     this.state = GameState.COOKING;
     this.lever.show();
     
-    // 随机一个订单（根据上菜数量渐进难度，每做一道菜解锁新难度）
+    // 随机一个订单（根据上菜数量渐进难度），不能与上一道连续重复
     const maxDifficulty = Math.min(5, 1 + this.dishesServed);
-    const availableOrders = ORDERS.filter(o => o.difficulty <= maxDifficulty);
+    let availableOrders = ORDERS.filter(o => o.difficulty <= maxDifficulty);
+    // 排除上一道菜（至少有2道可选时才排除）
+    if (this.lastOrderName && availableOrders.length > 1) {
+      availableOrders = availableOrders.filter(o => o.name !== this.lastOrderName);
+    }
     this.currentOrder = availableOrders[Math.floor(Math.random() * availableOrders.length)];
+    this.lastOrderName = this.currentOrder.name;
     
     // 渲染左上角菜谱
     this.ui.orderName.textContent = `${this.currentOrder.emoji} ${this.currentOrder.name}`;

@@ -316,13 +316,13 @@ export class FoodSystem {
       // 随机初始旋转角度
       sprite.material.rotation = Math.random() * Math.PI * 2;
 
-      // 紧密堆积分布 — 食材集中在锅底中心，互相重叠
+      // 自然分布 — 食材散布在锅底中心区域
       const goldenAngle = 2.399963;
       const angle = i * goldenAngle + Math.random() * 0.5;
-      // 大幅缩小分布半径，让食材紧密堆积在锅底
-      const maxR = wokRadius * 0.38;
-      // 使用更紧凑的分布，更多食材集中在中心
-      const r = Math.pow((i + 0.5) / totalPieces, 0.7) * maxR + Math.random() * 0.08;
+      // 食材分布在锅面 55% 范围内
+      const maxR = wokRadius * 0.55;
+      // 适度分散，中心稍密、外围稍疏
+      const r = Math.sqrt((i + 0.5) / totalPieces) * maxR + Math.random() * 0.1;
 
       const food = new FoodItem(piece.ingredient, sprite, s);
       food.baseAngle = angle;
@@ -421,29 +421,31 @@ export class FoodSystem {
           food.vy = 2;
         }
       } else if (food.settled) {
-        // 自然堆积：食材落在当前位置，受向中心的柔和滑动力
+        // 自然堆积：食材在锅底自然散布，不过于集中也不过于分散
         const dx = sp.position.x - wokCenter.x;
         const dz = sp.position.z - wokCenter.z;
         const r = Math.sqrt(dx * dx + dz * dz);
-        const maxPileR = this.wokRadius * 0.35;
+        // 堆积范围 — 锅面的 60%，食材自然散布在这个区域内
+        const maxPileR = this.wokRadius * 0.6;
 
-        // 向锅底中心施加柔和聚拢力
-        if (r > 0.01) {
-          // 超出堆积范围的施加更强的力
-          const pullStrength = r > maxPileR ? 0.06 : 0.015;
-          sp.position.x -= (dx / r) * r * pullStrength;
-          sp.position.z -= (dz / r) * r * pullStrength;
+        // 只有超出堆积范围才施加聚拢力，范围内的不拉
+        if (r > maxPileR) {
+          const excess = r - maxPileR;
+          const pullStrength = excess * 0.04;
+          sp.position.x -= (dx / r) * pullStrength;
+          sp.position.z -= (dz / r) * pullStrength;
         }
 
-        // 食材之间的轻微推挤 — 防止完全重叠，视觉更自然
+        // 食材之间的推挤 — 力度更强，让食材自然分散开
         for (const other of this.foods) {
           if (other === food || !other.settled) continue;
           const ox = sp.position.x - other.sprite.position.x;
           const oz = sp.position.z - other.sprite.position.z;
           const dist = Math.sqrt(ox * ox + oz * oz);
-          const minDist = (food.baseScale + other.baseScale) * 0.12;
+          // 推挤距离基于食材实际大小，更大的间距
+          const minDist = (food.baseScale + other.baseScale) * 0.28;
           if (dist < minDist && dist > 0.001) {
-            const pushForce = (minDist - dist) * 0.02;
+            const pushForce = (minDist - dist) * 0.06;
             sp.position.x += (ox / dist) * pushForce;
             sp.position.z += (oz / dist) * pushForce;
           }
