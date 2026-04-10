@@ -27,7 +27,7 @@ export class SceneManager {
     const aspect = container.clientWidth / container.clientHeight;
     this.camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 100);
     this.camera.position.set(0, 9.5, 9.5);
-    this.camera.lookAt(0, 0.8, -0.5);
+    this.camera.lookAt(0, 0.95, -0.5);
 
     // 摄像机震动
     this._shakeIntensity = 0;
