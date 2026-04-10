@@ -350,7 +350,8 @@ export class FoodSystem {
       const fRand = 0.6 + Math.random() * 0.8;
       food.vy = force * 8 * fRand + Math.random() * 2 + 1;
       food.vx = (Math.random() - 0.5) * force * 2;
-      food.vz = (Math.random() - 0.5) * force * 1.2 - force * 0.8;
+      // 去掉固定的 -Z 偏移，让食材均匀散开而不是偏向一侧
+      food.vz = (Math.random() - 0.5) * force * 1.5;
       food.isFlying = true;
       food.settled = false;
       food.flipped = false;
@@ -387,6 +388,13 @@ export class FoodSystem {
         const dz = sp.position.z - wokCenter.z;
         const r = Math.sqrt(dx * dx + dz * dz);
 
+        // 飞行中也施加轻微的回中心力，防止食材偏移
+        if (r > this.wokRadius * 0.3) {
+          const centerPull = 2.0 * dt;
+          food.vx -= (dx / r) * centerPull;
+          food.vz -= (dz / r) * centerPull;
+        }
+
         if (r < this.wokRadius * 0.95) {
           const t = r / this.wokRadius;
           const surfaceY = wokCenter.y - this.wokDepth * (1 - t * t) + 0.55;
@@ -394,8 +402,8 @@ export class FoodSystem {
           if (sp.position.y <= surfaceY) {
             sp.position.y = surfaceY;
             food.vy = Math.abs(food.vy) * 0.2;
-            food.vx *= 0.6;
-            food.vz *= 0.6;
+            food.vx *= 0.5;
+            food.vz *= 0.5;
             food.rotSpeed *= 0.5;
 
             if (Math.abs(food.vy) < 0.4) {
@@ -410,10 +418,10 @@ export class FoodSystem {
             }
           }
         } else {
-          // 超出锅面 — 拉回
+          // 超出锅面 — 强力拉回
           const pullAngle = Math.atan2(dz, dx);
-          food.vx -= Math.cos(pullAngle) * 8 * dt;
-          food.vz -= Math.sin(pullAngle) * 8 * dt;
+          food.vx -= Math.cos(pullAngle) * 12 * dt;
+          food.vz -= Math.sin(pullAngle) * 12 * dt;
         }
 
         if (sp.position.y < -0.2) {
@@ -425,13 +433,18 @@ export class FoodSystem {
         const dx = sp.position.x - wokCenter.x;
         const dz = sp.position.z - wokCenter.z;
         const r = Math.sqrt(dx * dx + dz * dz);
-        // 堆积范围 — 锅面的 60%，食材自然散布在这个区域内
-        const maxPileR = this.wokRadius * 0.6;
+        // 堆积范围 — 锅面的 50%，食材更集中在中心
+        const maxPileR = this.wokRadius * 0.5;
 
-        // 只有超出堆积范围才施加聚拢力，范围内的不拉
+        // 超出堆积范围施加较强的聚拢力
         if (r > maxPileR) {
           const excess = r - maxPileR;
-          const pullStrength = excess * 0.04;
+          const pullStrength = excess * 0.12;
+          sp.position.x -= (dx / r) * pullStrength;
+          sp.position.z -= (dz / r) * pullStrength;
+        } else if (r > maxPileR * 0.6) {
+          // 范围内也施加微弱的向心力，让食材更聚拢
+          const pullStrength = 0.01;
           sp.position.x -= (dx / r) * pullStrength;
           sp.position.z -= (dz / r) * pullStrength;
         }

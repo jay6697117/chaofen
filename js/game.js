@@ -366,7 +366,17 @@ export class GameManager {
   showDishModal(order, addScore) {
     // 设置文案和星星
     this.ui.dishName.textContent = order.name;
-    const stars = Math.min(3, Math.max(1, Math.floor((addScore / order.baseScore) / order.seasonings)));
+    // 基于平均调料得分评定星级（旧公式几乎不可能拿高星）
+    // 平均倍率：全 Perfect=1.5, 全 Good=1.0, 全 Bad=0.5
+    const avgMultiplier = addScore / (order.baseScore * order.seasonings);
+    let stars;
+    if (avgMultiplier >= 1.3) {
+      stars = 3; // 大部分 Perfect
+    } else if (avgMultiplier >= 0.85) {
+      stars = 2; // 大部分 Good
+    } else {
+      stars = 1; // 较多 Bad 或 Miss
+    }
     this.ui.dishStars.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
     
     // 重置图片容器
