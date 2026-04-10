@@ -75,9 +75,66 @@ export class AudioManager {
     }
   }
 
-  // 颠锅声音别名
+  // 真实的颠锅音效（金属碰撞 + 食材摩擦）
   playToss(force = 1) {
-    this.playDrop();
+    if (!this.enabled) return;
+    this._init();
+    
+    const t = this.ctx.currentTime;
+    const actualForce = Math.min(1.5, Math.max(0.3, force)); // 约束力度范围
+    
+    // 1. 低频碰撞重击声 (Wok thud) 模拟锅底碰到灶台或颠起瞬间的发力
+    const thud = this.ctx.createOscillator();
+    const thudGain = this._gain(this.volume * 0.7 * actualForce);
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(180, t);
+    thud.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+    thudGain.gain.setValueAtTime(this.volume * 0.7 * actualForce, t);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    thud.connect(thudGain);
+    thud.start(t);
+    thud.stop(t + 0.15);
+
+    // 2. 金属撞击/食材在铁锅刮擦的宽频噪音 (Crash/Scrape)
+    const bufferSize = this.ctx.sampleRate * 0.25; 
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    
+    // 使用带通滤波器塑造金属脆擦声
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.value = 3200;
+    noiseFilter.Q.value = 1.0;
+    
+    const noiseGain = this._gain(this.volume * 0.8 * actualForce);
+    noiseGain.gain.setValueAtTime(this.volume * 0.8 * actualForce, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25); // 噪音衰减
+    
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noise.start(t);
+
+    // 3. 铁锅的金属共振和余震 (Metallic Ringing)
+    const ringFreqs = [750, 1800, 3100]; // 不和谐金属相差频率
+    ringFreqs.forEach((freq) => {
+      const ring = this.ctx.createOscillator();
+      const rGain = this._gain(this.volume * 0.15 * actualForce);
+      ring.type = 'triangle'; // 三角波适合做金属闷声
+      ring.frequency.setValueAtTime(freq, t);
+      // 让部分频率稍微滑动模拟多普勒/结构变形音
+      ring.frequency.exponentialRampToValueAtTime(freq * 0.95, t + 0.3);
+      
+      rGain.gain.setValueAtTime(this.volume * 0.15 * actualForce, t);
+      rGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3); // 尾音
+      ring.connect(rGain);
+      ring.start(t);
+      ring.stop(t + 0.3);
+    });
   }
 
   // 成功别名
