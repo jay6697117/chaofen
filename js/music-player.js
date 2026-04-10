@@ -96,7 +96,8 @@ export class MusicPlayer {
         </div>
       </div>
     `;
-    document.body.appendChild(wrapper);
+    const gameWrapper = document.getElementById('game-wrapper') || document.body;
+    gameWrapper.appendChild(wrapper);
 
     // 缓存 DOM 引用
     this.el = wrapper;

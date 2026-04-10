@@ -60,7 +60,7 @@ export class GameManager {
     this.fireSystem.setBasePosition(this.wok.getWorldCenter());
 
     // 初始化操作杆
-    this.lever = new LeverControl(document.body);
+    this.lever = new LeverControl(document.getElementById('game-wrapper') || document.body);
     
     // 同步操作杆与物理锅
     this.lever.onChange((val) => {
