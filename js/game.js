@@ -33,7 +33,6 @@ export class GameManager {
       progressBar: document.querySelector('.progress-bar-fill'),
       seasoningUI: document.getElementById('seasoning-ui'),
       seasoningCanvas: document.getElementById('seasoning-canvas'),
-      seasoningBtn: document.getElementById('seasoning-btn'),
       seasoningHint: document.getElementById('seasoning-hint'),
       feedbackText: document.getElementById('feedback-text'),
       comboText: document.getElementById('combo-text'),
@@ -79,13 +78,14 @@ export class GameManager {
       }
     });
 
-    // 绑定调料按钮点击事件
-    if (this.ui.seasoningBtn) {
-      this.ui.seasoningBtn.addEventListener('click', () => this.handleSeasoningClick());
-      this.ui.seasoningBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // 防止双重触发
+    // 绑定调料区域全局点击事件（全屏可点，提升体验）
+    if (this.ui.seasoningUI) {
+      const triggerSeasoning = (e) => {
+        if (e && e.cancelable) e.preventDefault(); // 防止双重触发和缩放
         this.handleSeasoningClick();
-      }, { passive: false });
+      };
+      this.ui.seasoningUI.addEventListener('mousedown', triggerSeasoning);
+      this.ui.seasoningUI.addEventListener('touchstart', triggerSeasoning, { passive: false });
     }
     
     this.state = GameState.INIT;
@@ -436,10 +436,10 @@ export class GameManager {
     
     // 绘制中心按钮指示
     ctx.fillStyle = color;
-    ctx.font = '24px sans-serif';
+    ctx.font = 'bold 28px "Noto Sans SC", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('TAP!', cx, cy);
+    ctx.fillText('撒料!', cx, cy);
   }
 
   showFeedback(text, type) {

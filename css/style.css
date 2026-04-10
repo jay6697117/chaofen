@@ -367,25 +367,12 @@ html, body {
   height: 100%;
 }
 
-.seasoning-btn {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary), var(--primary-light));
-  border: none;
-  color: white;
-  font-weight: 800;
-  font-size: 18px;
-  cursor: pointer;
-  box-shadow: 0 4px 15px rgba(255,107,53,0.5), inset 0 2px 5px rgba(255,255,255,0.4);
-  transition: transform 0.1s;
-}
-
-.seasoning-btn:active {
-  transform: translate(-50%, -50%) scale(0.9);
+.seasoning-instruction-text {
+  margin-top: 20px;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 1px;
+  animation: pulsing-bar 1s infinite alternate;
 }
 
 /* ---- 模态框 ---- */
