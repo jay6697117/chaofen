@@ -15,10 +15,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const closeHowToBtn = document.getElementById('close-how-to');
 
   // ===== 预加载所有游戏资源 =====
-  // 按钮在加载完成前显示加载状态
-  startBtn.disabled = true;
-  startBtnText.textContent = '加载中...';
-  startBtn.classList.add('loading');
+  // 按钮在 HTML 中默认就是 loading 态，预加载完成后激活
 
   preloadAllAssets((progress, taskName) => {
     // 更新按钮文字显示加载进度
