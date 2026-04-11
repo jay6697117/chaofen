@@ -1,6 +1,7 @@
 // 炒粉大师 — 3D 锅模型 + 颠锅物理
 
 import * as THREE from 'three';
+import { getChefHandCanvas } from './preloader.js';
 
 export class Wok3D {
   constructor(scene) {
@@ -130,67 +131,72 @@ export class Wok3D {
     this.scene.add(this.group);
   }
 
-  // 构建厨师的手（使用真实照片贴图）
+  // 构建厨师的手（优先使用预加载缓存，避免异步延迟）
   _buildChefHand() {
-    const loader = new THREE.TextureLoader();
-    loader.load('assets/images/chef_hand.png', (texture) => {
-      // 通过 Canvas 去除黑色背景，让手部透明
-      const img = texture.image;
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
+    const cachedCanvas = getChefHandCanvas();
+    if (cachedCanvas) {
+      // 预加载已完成 — 同步创建 Mesh，零延迟
+      this._createChefHandMesh(cachedCanvas);
+    } else {
+      // 回退：预加载未完成时使用异步加载
+      const loader = new THREE.TextureLoader();
+      loader.load('assets/images/chef_hand.png', (texture) => {
+        const img = texture.image;
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
 
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i + 1], b = data[i + 2];
-        // 计算亮度 — 深色（黑色背景）设为透明
-        const brightness = r * 0.299 + g * 0.587 + b * 0.114;
-        if (brightness < 35) {
-          // 纯黑区域完全透明
-          data[i + 3] = 0;
-        } else if (brightness < 60) {
-          // 过渡区域半透明（平滑边缘）
-          const alpha = ((brightness - 35) / 25) * 255;
-          data[i + 3] = Math.min(data[i + 3], Math.floor(alpha));
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const brightness = r * 0.299 + g * 0.587 + b * 0.114;
+          if (brightness < 35) {
+            data[i + 3] = 0;
+          } else if (brightness < 60) {
+            const alpha = ((brightness - 35) / 25) * 255;
+            data[i + 3] = Math.min(data[i + 3], Math.floor(alpha));
+          }
         }
-      }
 
-      ctx.putImageData(imageData, 0, 0);
-
-      // 从处理后的 Canvas 创建新纹理
-      const processedTexture = new THREE.CanvasTexture(canvas);
-      processedTexture.needsUpdate = true;
-
-      // 创建平面几何体来显示手部图片
-      const handWidth = 1.2;
-      const handHeight = 1.35;
-      const planeGeom = new THREE.PlaneGeometry(handWidth, handHeight);
-      const planeMat = new THREE.MeshBasicMaterial({
-        map: processedTexture,
-        transparent: true,
-        alphaTest: 0.1,
-        side: THREE.DoubleSide,
-        depthWrite: true,
+        ctx.putImageData(imageData, 0, 0);
+        this._createChefHandMesh(canvas);
       });
+    }
+  }
 
-      const handMesh = new THREE.Mesh(planeGeom, planeMat);
+  // 从处理后的 Canvas 创建厨师手 Mesh（共用逻辑）
+  _createChefHandMesh(canvas) {
+    const processedTexture = new THREE.CanvasTexture(canvas);
+    processedTexture.needsUpdate = true;
 
-      // 旋转平面使其水平放置（面朝上）
-      handMesh.rotation.x = -Math.PI / 2;
-      // 翻转 180° — 让袖口朝向玩家（+Z），手指朝向锅（-Z）
-      handMesh.rotation.z = Math.PI;
-
-      // 放置在锅把中后段位置
-      const handleGripZ = this.radius + this.handleLength * 0.55;
-      handMesh.position.set(0, 0.12, handleGripZ + 0.15);
-
-      this.body.add(handMesh);
-      this.chefHand = handMesh;
+    const handWidth = 1.2;
+    const handHeight = 1.35;
+    const planeGeom = new THREE.PlaneGeometry(handWidth, handHeight);
+    const planeMat = new THREE.MeshBasicMaterial({
+      map: processedTexture,
+      transparent: true,
+      alphaTest: 0.1,
+      side: THREE.DoubleSide,
+      depthWrite: true,
     });
+
+    const handMesh = new THREE.Mesh(planeGeom, planeMat);
+
+    // 旋转平面使其水平放置（面朝上）
+    handMesh.rotation.x = -Math.PI / 2;
+    // 翻转 180° — 让袖口朝向玩家（+Z），手指朝向锅（-Z）
+    handMesh.rotation.z = Math.PI;
+
+    // 放置在锅把中后段位置
+    const handleGripZ = this.radius + this.handleLength * 0.55;
+    handMesh.position.set(0, 0.12, handleGripZ + 0.15);
+
+    this.body.add(handMesh);
+    this.chefHand = handMesh;
   }
 
   // 操作杆实时控制（非颠锅状态下跟随操作杆）

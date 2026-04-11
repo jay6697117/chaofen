@@ -46,159 +46,159 @@ const FOOD_SCALES = {
  * 图片实际是 JPEG（无透明通道），需要手动抠背景
  * 棋盘格特征：灰白交替 (约 #CCCCCC 和 #FFFFFF)
  */
-function loadFoodTexture(ingId) {
-  if (textureCache.has(ingId)) return textureCache.get(ingId);
+/**
+ * 加载食材纹理 — 去除棋盘格/白色背景
+ */
+export function loadFoodTexture(ingId) {
+  if (textureCache.has(ingId)) {
+    return textureCache.get(ingId);
+  }
 
   const imgPath = FOOD_IMAGES[ingId];
-  if (!imgPath) return null;
+  if (!imgPath) return Promise.resolve(null);
 
   const texture = new THREE.Texture();
   texture.colorSpace = THREE.SRGBColorSpace;
+  // 先把未加载的纹理存入缓存，供同步调用返回
+  textureCache.set(ingId, texture);
 
-  const img = new Image();
-  img.src = imgPath;
-  img.onload = () => {
-    const size = 512; // 统一尺寸提升性能
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous'; // 避免 canvas 污染报错
+    img.src = imgPath;
+    img.onload = () => {
+      const size = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
 
-    // 居中绘制
-    const scale = size / Math.max(img.width, img.height);
-    const dw = img.width * scale;
-    const dh = img.height * scale;
-    ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
+      const scale = size / Math.max(img.width, img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      ctx.drawImage(img, (size - dw) / 2, (size - dh) / 2, dw, dh);
 
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const data = imageData.data;
+      const imageData = ctx.getImageData(0, 0, size, size);
+      const data = imageData.data;
 
-    // 检测角落是否已透明（图片自带 Alpha）
-    let transparentCornerCount = 0;
-    const testCorners = [[0,0],[size-1,0],[0,size-1],[size-1,size-1]];
-    for (const [cx, cy] of testCorners) {
-      if (data[((cy * size + cx) * 4) + 3] < 128) transparentCornerCount++;
-    }
-
-    if (transparentCornerCount >= 3) {
-      // 图片自带透明通道，仅清理 canvas 空白区
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i] === 0 && data[i+1] === 0 && data[i+2] === 0 && data[i+3] === 0) {
-          data[i+3] = 0;
-        }
-      }
-    } else {
-      // 使用 Flood Fill 从角落扩展来检测背景区域
-      const bgMask = new Uint8Array(size * size); // 0=未知, 1=背景
-
-      // 判断一个像素是否"像背景"
-      // 棋盘格特征：灰色(~205,205,205) 和 白色(~255,255,255) 交替
-      const isBgColor = (idx) => {
-        const r = data[idx], g = data[idx+1], b = data[idx+2];
-        // 纯黑（canvas 未绘制区域）
-        if (r === 0 && g === 0 && b === 0) return true;
-        // 棋盘格检测：RGB 各通道差值很小（接近灰度），且亮度较高
-        const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
-        const brightness = (r + g + b) / 3;
-        // 灰色格子 brightness≈205, 白色格子 brightness≈255
-        return maxDiff <= 8 && brightness > 180;
-      };
-
-      // BFS Flood Fill 从角落和边缘开始
-      const queue = [];
-      // 种子点：四角 + 沿四边每隔一段距离取点
-      const seedPoints = [
-        [0, 0], [size-1, 0], [0, size-1], [size-1, size-1],
-      ];
-      // 四边每隔 16 像素添加种子点
-      for (let i = 0; i < size; i += 16) {
-        seedPoints.push([i, 0], [i, size-1], [0, i], [size-1, i]);
+      // 检测角落是否已透明
+      let transparentCornerCount = 0;
+      const testCorners = [[0,0],[size-1,0],[0,size-1],[size-1,size-1]];
+      for (const [cx, cy] of testCorners) {
+        if (data[((cy * size + cx) * 4) + 3] < 128) transparentCornerCount++;
       }
 
-      for (const [sx, sy] of seedPoints) {
-        const si = sy * size + sx;
-        const sIdx = si * 4;
-        if (bgMask[si] === 0 && isBgColor(sIdx)) {
-          bgMask[si] = 1;
-          queue.push(si);
-        }
-      }
-
-      // BFS 扩展 — 8 方向（含对角线），只要目标像素是背景色就扩展
-      // 不用 colorClose，因为棋盘格灰白交替差值≈50，用颜色相近判断会阻断
-      const dirs = [
-        -1, 1, -size, size,                     // 上下左右
-        -size - 1, -size + 1, size - 1, size + 1  // 对角线
-      ];
-      while (queue.length > 0) {
-        const ci = queue.shift();
-        const cx = ci % size;
-        const cy = (ci / size) | 0;
-
-        for (const d of dirs) {
-          const ni = ci + d;
-          if (ni < 0 || ni >= size * size) continue;
-          const nx = ni % size;
-          const ny = (ni / size) | 0;
-          // 防止边界回绕：相邻像素的 x/y 坐标差不能超过 1
-          if (Math.abs(nx - cx) > 1 || Math.abs(ny - cy) > 1) continue;
-          if (bgMask[ni] !== 0) continue;
-
-          const nIdx = ni * 4;
-          if (isBgColor(nIdx)) {
-            bgMask[ni] = 1;
-            queue.push(ni);
+      if (transparentCornerCount >= 3) {
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] === 0 && data[i+1] === 0 && data[i+2] === 0 && data[i+3] === 0) {
+            data[i+3] = 0;
           }
         }
-      }
+      } else {
+        const bgMask = new Uint8Array(size * size); 
 
-      // 应用背景 mask
-      for (let i = 0; i < size * size; i++) {
-        const idx = i * 4;
-        if (bgMask[i] === 1) {
-          data[idx + 3] = 0; // 背景 — 完全透明
-        } else if (data[idx] === 0 && data[idx+1] === 0 && data[idx+2] === 0) {
-          data[idx + 3] = 0; // canvas 未绘制区域
+        const isBgColor = (idx) => {
+          const r = data[idx], g = data[idx+1], b = data[idx+2];
+          if (r === 0 && g === 0 && b === 0) return true;
+          const maxDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
+          const brightness = (r + g + b) / 3;
+          return maxDiff <= 8 && brightness > 180;
+        };
+
+        const queue = [];
+        const seedPoints = [
+          [0, 0], [size-1, 0], [0, size-1], [size-1, size-1],
+        ];
+        for (let i = 0; i < size; i += 16) {
+          seedPoints.push([i, 0], [i, size-1], [0, i], [size-1, i]);
         }
-      }
 
-      // 边缘羽化：背景和食材交界处渐变
-      for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-          const i = y * size + x;
-          if (bgMask[i] === 1) continue; // 已是背景
-          const idx = i * 4;
-          if (data[idx + 3] === 0) continue; // 已是透明
+        for (const [sx, sy] of seedPoints) {
+          const si = sy * size + sx;
+          const sIdx = si * 4;
+          if (bgMask[si] === 0 && isBgColor(sIdx)) {
+            bgMask[si] = 1;
+            queue.push(si);
+          }
+        }
 
-          // 检查 3 像素内是否有背景
-          let minDist = 4;
-          for (let dy = -3; dy <= 3 && minDist > 1; dy++) {
-            for (let dx = -3; dx <= 3 && minDist > 1; dx++) {
-              const nx = x + dx, ny = y + dy;
-              if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
-              if (bgMask[ny * size + nx] === 1) {
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < minDist) minDist = dist;
-              }
+        const dirs = [
+          -1, 1, -size, size,
+          -size - 1, -size + 1, size - 1, size + 1
+        ];
+        while (queue.length > 0) {
+          const ci = queue.shift();
+          const cx = ci % size;
+          const cy = (ci / size) | 0;
+
+          for (const d of dirs) {
+            const ni = ci + d;
+            if (ni < 0 || ni >= size * size) continue;
+            const nx = ni % size;
+            const ny = (ni / size) | 0;
+            if (Math.abs(nx - cx) > 1 || Math.abs(ny - cy) > 1) continue;
+            if (bgMask[ni] !== 0) continue;
+
+            const nIdx = ni * 4;
+            if (isBgColor(nIdx)) {
+              bgMask[ni] = 1;
+              queue.push(ni);
             }
           }
-          if (minDist <= 3) {
-            data[idx + 3] = Math.floor(data[idx + 3] * (minDist / 3));
+        }
+
+        for (let i = 0; i < size * size; i++) {
+          const idx = i * 4;
+          if (bgMask[i] === 1) {
+            data[idx + 3] = 0;
+          } else if (data[idx] === 0 && data[idx+1] === 0 && data[idx+2] === 0) {
+            data[idx + 3] = 0;
+          }
+        }
+
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = y * size + x;
+            if (bgMask[i] === 1) continue;
+            const idx = i * 4;
+            if (data[idx + 3] === 0) continue;
+
+            let minDist = 4;
+            for (let dy = -3; dy <= 3 && minDist > 1; dy++) {
+              for (let dx = -3; dx <= 3 && minDist > 1; dx++) {
+                const nx = x + dx, ny = y + dy;
+                if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
+                if (bgMask[ny * size + nx] === 1) {
+                  const dist = Math.sqrt(dx * dx + dy * dy);
+                  if (dist < minDist) minDist = dist;
+                }
+              }
+            }
+            if (minDist <= 3) {
+              data[idx + 3] = Math.floor(data[idx + 3] * (minDist / 3));
+            }
           }
         }
       }
-    }
 
+      ctx.putImageData(imageData, 0, 0);
+      texture.image = canvas;
+      texture.needsUpdate = true;
+      resolve(texture);
+    };
+    img.onerror = () => resolve(texture);
+  });
+}
 
-
-
-    ctx.putImageData(imageData, 0, 0);
-    texture.image = canvas;
-    texture.needsUpdate = true;
-  };
-
-  textureCache.set(ingId, texture);
-  return texture;
+/**
+ * 预加载所有食材图片并完成 Canvas 处理
+ */
+export async function preloadAllFoodTextures() {
+  const promises = Object.keys(FOOD_IMAGES).map((id) => {
+    const res = loadFoodTexture(id);
+    return res instanceof Promise ? res : Promise.resolve(res);
+  });
+  await Promise.all(promises);
 }
 
 /**

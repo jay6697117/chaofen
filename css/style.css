@@ -599,6 +599,33 @@ html, body {
 
 .primary-btn:active, .secondary-btn:active { transform: scale(0.95); }
 
+/* 按钮加载中状态 */
+.primary-btn.loading {
+  opacity: 0.7;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, #666, #888);
+  box-shadow: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.primary-btn.loading::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; width: 200%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  animation: loading-shimmer 1.5s infinite;
+}
+
+.primary-btn:disabled {
+  pointer-events: none;
+}
+
+@keyframes loading-shimmer {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
 /* ---- 辅助 ---- */
 .hidden { display: none !important; }
 
